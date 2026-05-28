@@ -1,0 +1,22 @@
+[[package]]
+name = "requests"
+version = "2.28.0"
+description = "Python HTTP for Humans."
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[[package]]
+name = "certifi"
+version = "2023.5.7"
+description = "Python package for providing Mozilla's CA Bundle."
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+requests = ">=2.0"
+
+[metadata]
+lock-version = "1.1"
+python-versions = "^3.9"

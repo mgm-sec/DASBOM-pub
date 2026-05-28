@@ -1,0 +1,2647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SBOM Dependency Graph</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #e6edf3; display: flex; height: 100vh; overflow: hidden; font-size: 13px; }
+#sidebar { width: 300px; flex-shrink: 0; background: #161b22; border-right: 1px solid #30363d; display: flex; flex-direction: column; overflow: hidden; }
+#sidebar-header { padding: 12px 14px 10px; border-bottom: 1px solid #30363d; }
+#sidebar-header h1 { font-size: 13px; font-weight: 600; color: #58a6ff; }
+#sidebar-header .sub { font-size: 11px; color: #8b949e; margin-top: 2px; }
+#filter-scroll { flex: 1; overflow-y: auto; padding: 8px 0; }
+#filter-scroll::-webkit-scrollbar { width: 4px; }
+#filter-scroll::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
+.sec-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 14px; cursor: pointer; user-select: none; font-size: 11px; font-weight: 600; color: #8b949e; letter-spacing: .05em; text-transform: uppercase; }
+.sec-header:hover { color: #e6edf3; } .sec-arrow { font-size: 10px; transition: transform .2s; } .sec-arrow.open { transform: rotate(90deg); }
+.sec-body { padding: 0 14px 8px; } .sec-body.hidden { display: none; }
+#search-wrap { padding: 6px 14px; }
+#search { width: 100%; padding: 6px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #e6edf3; font-size: 12px; outline: none; }
+#search:focus { border-color: #58a6ff; }
+#search-count { font-size: 11px; color: #8b949e; margin-top: 4px; min-height: 16px; }
+.slider-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.slider-row label { font-size: 11px; color: #8b949e; white-space: nowrap; }
+.slider-val { font-size: 11px; color: #e6edf3; font-weight: 600; min-width: 20px; text-align: right; }
+input[type=range] { flex: 1; accent-color: #58a6ff; cursor: pointer; }
+.slider-hint { font-size: 10px; color: #6e7681; }
+.eco-grid { display: flex; flex-direction: column; gap: 3px; }
+.eco-item { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 3px 0; }
+.eco-item:hover .eco-label { color: #e6edf3; }
+.eco-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.eco-label { flex: 1; font-size: 12px; color: #c9d1d9; } .eco-count { font-size: 10px; color: #6e7681; }
+.eco-cb { accent-color: #58a6ff; cursor: pointer; }
+.filter-select, .filter-search { width: 100%; padding: 5px 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #e6edf3; font-size: 12px; cursor: pointer; outline: none; margin-bottom: 6px; }
+.filter-select:focus, .filter-search:focus { border-color: #58a6ff; }
+.repo-list { max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+.repo-list::-webkit-scrollbar { width: 3px; } .repo-list::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
+.repo-item { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-radius: 4px; cursor: pointer; }
+.repo-item:hover { background: #21262d; }
+.repo-item input[type=checkbox] { accent-color: #58a6ff; cursor: pointer; flex-shrink: 0; }
+.repo-item label { font-size: 11px; color: #c9d1d9; cursor: pointer; flex: 1; word-break: break-all; }
+#repo-sel-badge { font-size: 10px; background: #1f3a5f; color: #58a6ff; border-radius: 8px; padding: 1px 6px; margin-left: 4px; display: none; }
+#transitive-wrap { margin-top: 6px; padding-top: 6px; border-top: 1px solid #21262d; display: none; }
+#sec-depth { display: block; }
+.dep-edge-dot { width: 10px; height: 4px; border-radius: 2px; flex-shrink: 0; }
+/* Security section */
+.sec-stat-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; font-size: 11px; }
+.sec-stat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.sec-stat-lbl { flex: 1; color: #c9d1d9; }
+.sec-stat-cnt { font-weight: 600; min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
+.sec-stat-pct { color: #6e7681; font-size: 10px; min-width: 30px; text-align: right; }
+.sec-bar { height: 2px; background: #21262d; border-radius: 1px; margin: 0 0 4px 14px; }
+.sec-bar-fill { height: 100%; border-radius: 1px; transition: width .3s; }
+.sec-legend { display: none; margin-top: 6px; font-size: 10px; }
+.sec-legend.visible { display: block; }
+.leg-row { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; color: #8b949e; }
+.leg-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+/* Chips */
+#chips-wrap { padding: 4px 14px 6px; display: flex; flex-wrap: wrap; gap: 4px; min-height: 0; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 6px; background: #1f3a5f; border: 1px solid #388bfd40; border-radius: 10px; font-size: 11px; color: #58a6ff; max-width: 200px; }
+.chip span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip-x { cursor: pointer; font-size: 12px; color: #8b949e; flex-shrink: 0; }
+.chip-x:hover { color: #ff7b72; }
+#chip-clear { font-size: 11px; color: #8b949e; cursor: pointer; padding: 2px 4px; }
+#chip-clear:hover { color: #ff7b72; }
+/* Stats */
+#stats-body { display: grid; grid-template-columns: 1fr auto; gap: 3px 8px; padding: 4px 0; }
+.stat-k { font-size: 11px; color: #8b949e; } .stat-v { font-size: 11px; color: #e6edf3; font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
+.stat-bar { height: 3px; background: #21262d; border-radius: 2px; margin: 2px 0 6px; grid-column: 1/-1; }
+.stat-fill { height: 100%; border-radius: 2px; transition: width .3s; }
+/* Detail */
+#detail-panel { padding: 10px 14px; font-size: 12px; overflow-y: auto; overflow-x: hidden; flex: 1; min-height: 0; }
+#right-pane { width: 300px; flex-shrink: 0; background: #161b22; border-left: 1px solid #30363d; display: flex; flex-direction: column; overflow: hidden; }
+#right-metrics { flex-shrink: 0; border-bottom: 1px solid #30363d; padding: 0 14px 8px; overflow-y: auto; max-height: min(280px, 38vh); }
+#right-detail { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+#right-detail .sec-header { flex-shrink: 0; cursor: default; }
+#detail-panel h2 { font-size: 13px; font-weight: 600; margin-bottom: 8px; word-break: break-all; color: #e6edf3; }
+.dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin-bottom: 6px; }
+.dk { color: #8b949e; font-size: 11px; white-space: nowrap; } .dv { word-break: break-all; font-size: 11px; }
+.tag-list { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
+.tag { padding: 1px 6px; background: #21262d; border: 1px solid #30363d; border-radius: 4px; font-size: 10px; cursor: pointer; white-space: nowrap; }
+.tag:hover { border-color: #58a6ff; color: #58a6ff; }
+.tag.dep-tag { border-color: #1d4e3a; color: #3fb950; } .tag.dep-tag:hover { border-color: #3fb950; }
+.no-sel { color: #8b949e; font-size: 12px; padding: 8px 0; }
+.focus-btn { margin-top: 8px; width: 100%; padding: 5px; background: #1f3a5f; border: 1px solid #388bfd40; border-radius: 6px; color: #58a6ff; font-size: 12px; cursor: pointer; }
+.focus-btn:hover { background: #2d4a6f; }
+.dep-section { margin-top: 8px; }
+.dep-section-title { font-size: 11px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+/* Async sections */
+.async-section { margin-top: 10px; border-top: 1px solid #21262d; padding-top: 8px; }
+.async-title { font-size: 11px; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+.async-spinner { width: 10px; height: 10px; border: 2px solid #30363d; border-top-color: #58a6ff; border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
+/* Version badges */
+.ver-row { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-bottom: 3px; }
+.ver-badge { padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+.ver-ok    { background: #1a3a1a; color: #3fb950; border: 1px solid #3fb95040; }
+.ver-old   { background: #3a2a0a; color: #e3b341; border: 1px solid #e3b34140; }
+.ver-break { background: #3a1a0a; color: #f97316; border: 1px solid #f9731640; }
+.ver-way { background: #3a1a1a; color: #ff7b72; border: 1px solid #ff7b7240; }
+.ver-na  { color: #6e7681; font-size: 11px; }
+/* Conflict */
+.conflict-banner { display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: #2a1f0a; border: 1px solid #e3b34140; border-radius: 6px; font-size: 11px; color: #e3b341; margin-bottom: 6px; }
+.conflict-table { font-size: 10px; width: 100%; border-collapse: collapse; }
+.conflict-table td { padding: 2px 4px; vertical-align: top; }
+.conflict-table td:first-child { color: #8b949e; white-space: nowrap; padding-right: 8px; }
+.conflict-table td:last-child { color: #c9d1d9; word-break: break-all; }
+.conflict-table tr.cur-ver td { color: #58a6ff; }
+/* CVE */
+.cve-list { display: flex; flex-direction: column; gap: 4px; }
+.cve-item { padding: 5px 7px; border-radius: 5px; background: #1c2128; border: 1px solid #30363d; font-size: 11px; }
+.cve-header { display: flex; align-items: center; gap: 5px; margin-bottom: 2px; flex-wrap: wrap; }
+.cve-id { font-weight: 600; color: #58a6ff; font-size: 10px; text-decoration: none; }
+.cve-id:hover { text-decoration: underline; }
+.sev { padding: 1px 5px; border-radius: 3px; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.sev-CRITICAL { background: #3a1a1a; color: #ff7b72; } .sev-HIGH { background: #3a2010; color: #f97316; }
+.sev-MODERATE, .sev-MEDIUM { background: #2a250a; color: #e3b341; } .sev-LOW { background: #1a2a3a; color: #58a6ff; }
+.sev-UNKNOWN, .sev- { background: #21262d; color: #8b949e; }
+.cve-fix { font-size: 10px; color: #3fb950; margin-top: 2px; } .cve-no-fix { font-size: 10px; color: #8b949e; margin-top: 2px; }
+.cve-summary { color: #8b949e; font-size: 10px; margin-top: 2px; line-height: 1.4; }
+.no-cve { font-size: 11px; color: #3fb950; }
+/* Dep chain audit */
+.chain-level { margin-bottom: 6px; padding: 5px 7px; background: #1c2128; border-radius: 5px; border: 1px solid #21262d; }
+.chain-level-hdr { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-bottom: 3px; }
+.chain-level-label { color: #c9d1d9; font-weight: 600; }
+.chain-level-count { color: #8b949e; font-size: 10px; }
+.chain-issue { font-size: 10px; color: #8b949e; padding: 1px 0 1px 10px; display: flex; align-items: flex-start; gap: 4px; overflow: hidden; }
+.chain-issue-cve { display: block; font-size: 10px; padding: 0 0 2px 10px; overflow: hidden; }
+.chain-pkg-name { color: #c9d1d9; word-break: break-all; }
+.chain-more { font-size: 10px; color: #8b949e; cursor: pointer; padding-left: 10px; }
+.chain-more:hover { color: #58a6ff; }
+/* Canvas */
+#container { flex: 1; position: relative; }
+#sigma-container { width: 100%; height: 100%; }
+#controls { position: absolute; bottom: 16px; right: 16px; display: flex; flex-direction: column; gap: 6px; z-index: 10; }
+.ctrl-btn { padding: 7px 14px; background: #161b22cc; backdrop-filter: blur(4px); border: 1px solid #30363d; border-radius: 6px; color: #e6edf3; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.ctrl-btn:hover { background: #1f2937cc; border-color: #58a6ff; }
+#tooltip { position: absolute; background: #1c2128f0; backdrop-filter: blur(4px); border: 1px solid #30363d; border-radius: 6px; padding: 8px 10px; font-size: 12px; pointer-events: none; display: none; max-width: 300px; z-index: 20; }
+.t-name { font-weight: 600; margin-bottom: 2px; } .t-sub { color: #8b949e; font-size: 11px; }
+.loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; background: #0d1117; z-index: 50; color: #8b949e; font-size: 13px; }
+.spinner { width: 32px; height: 32px; border: 3px solid #21262d; border-top-color: #58a6ff; border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#focus-banner { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: #238636cc; border: 1px solid #3fb95060; border-radius: 20px; padding: 4px 14px; font-size: 12px; color: #3fb950; z-index: 15; display: none; cursor: pointer; backdrop-filter: blur(4px); }
+#focus-banner:hover { background: #2ea043cc; }
+/* History / trend */
+#history-section { flex-shrink: 0; border-bottom: 1px solid #30363d; padding: 0 14px 8px; }
+#history-section .sec-header { padding-left: 0; cursor: default; }
+#history-slider-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+#history-slider { flex: 1; accent-color: #58a6ff; cursor: pointer; }
+#history-date { font-size: 10px; color: #58a6ff; font-weight: 600; white-space: nowrap; }
+#history-snapshot-banner { font-size: 10px; color: #e3b341; padding: 2px 0 4px; display: none; }
+/* Sparkline */
+#sparkline { width: 100%; height: 40px; display: block; margin-bottom: 4px; }
+/* Export buttons */
+#export-row { display: flex; gap: 4px; padding: 6px 14px; border-top: 1px solid #30363d; flex-shrink: 0; }
+.export-btn { flex: 1; padding: 5px 4px; background: #161b22; border: 1px solid #30363d; border-radius: 5px; color: #8b949e; font-size: 10px; cursor: pointer; text-align: center; }
+.export-btn:hover { border-color: #58a6ff; color: #58a6ff; }
+/* Import button row */
+#import-row { display:flex; gap:4px; padding:6px 14px 4px; flex-shrink:0; }
+#btn-import-repo { flex:1; padding:5px 4px; background:#0d1117; border:1px solid #7c3aed50; border-radius:5px; color:#a78bfa; font-size:10px; cursor:pointer; }
+#btn-import-repo:hover { border-color:#7c3aed; background:#1a0a2e; }
+/* Import modal */
+#import-modal { display:none; position:fixed; inset:0; background:#000000bb; z-index:200; align-items:center; justify-content:center; }
+#import-modal.open { display:flex; }
+#import-box { background:#161b22; border:1px solid #30363d; border-radius:10px; width:480px; max-width:95vw; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; }
+#import-box h2 { font-size:13px; font-weight:600; color:#e6edf3; padding:12px 16px 10px; border-bottom:1px solid #30363d; }
+#import-tabs { display:flex; border-bottom:1px solid #30363d; }
+.import-tab { flex:1; padding:7px 0; text-align:center; font-size:11px; font-weight:600; cursor:pointer; color:#6e7681; border-bottom:2px solid transparent; }
+.import-tab.active { color:#a78bfa; border-bottom-color:#7c3aed; }
+#import-body { padding:14px 16px; overflow-y:auto; flex:1; }
+.import-label { font-size:11px; color:#8b949e; margin-bottom:4px; display:block; }
+.import-input { width:100%; padding:6px 10px; background:#0d1117; border:1px solid #30363d; border-radius:6px; color:#e6edf3; font-size:12px; outline:none; margin-bottom:10px; }
+.import-input:focus { border-color:#7c3aed; }
+#token-toggle { font-size:10px; color:#6e7681; cursor:pointer; margin-bottom:6px; display:block; }
+#token-toggle:hover { color:#a78bfa; }
+#token-wrap { display:none; margin-bottom:10px; }
+#import-progress { font-size:10px; font-family:monospace; color:#8b949e; background:#0d1117; border:1px solid #21262d; border-radius:5px; padding:8px; max-height:160px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; display:none; margin-bottom:8px; }
+#import-progress.visible { display:block; }
+.import-actions { display:flex; gap:6px; justify-content:flex-end; padding:10px 16px; border-top:1px solid #30363d; flex-shrink:0; }
+.import-btn { padding:5px 14px; font-size:11px; font-weight:600; border-radius:6px; cursor:pointer; border:1px solid #30363d; }
+.import-btn.primary { background:#7c3aed; border-color:#7c3aed; color:#fff; }
+.import-btn.primary:hover { background:#6d28d9; }
+.import-btn.primary:disabled { background:#3b1c6e; cursor:not-allowed; }
+.import-btn.secondary { background:#161b22; color:#8b949e; }
+.import-btn.secondary:hover { color:#e6edf3; }
+.import-err { font-size:11px; color:#ff7b72; margin-bottom:8px; }
+#imported-repos-sec { display:none; }
+#imported-repos-list { font-size:10px; color:#8b949e; padding:2px 0; }
+/* Completeness badge */
+.comp-badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: 600; }
+.comp-ok   { background: #162115; color: #3fb950; border: 1px solid #3fb95030; }
+.comp-warn { background: #2a1f0a; color: #e3b341; border: 1px solid #e3b34130; }
+.comp-bad  { background: #2a1a1a; color: #ff7b72; border: 1px solid #ff7b7230; }
+/* ── Right-pane tabs ── */
+.right-tabs { display:flex; border-bottom:1px solid #30363d; flex-shrink:0; }
+.right-tab { padding:7px 16px; font-size:11px; font-weight:600; cursor:pointer; color:#6e7681; border-bottom:2px solid transparent; margin-bottom:-1px; letter-spacing:.03em; user-select:none; }
+.right-tab.active { color:#e6edf3; border-bottom-color:#58a6ff; }
+.right-tab:hover:not(.active) { color:#c9d1d9; }
+#tab-overview { display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
+#tab-priorities { display:none; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
+/* ── Priorities tab ── */
+#priorities-scope { font-size:10px; color:#6e7681; padding:5px 12px 4px; flex-shrink:0; border-bottom:1px solid #21262d; }
+#priorities-content { overflow-y:auto; flex:1; padding:6px 8px; }
+#pri-reset-row { display:flex; justify-content:flex-end; padding:3px 10px; flex-shrink:0; border-top:1px solid #21262d; }
+#pri-reset-btn { font-size:10px; color:#6e7681; background:none; border:none; cursor:pointer; padding:2px 4px; }
+#pri-reset-btn:hover { color:#e6edf3; }
+.pri-section-title { font-size:9px; color:#6e7681; text-transform:uppercase; letter-spacing:.05em; font-weight:600; margin:8px 0 4px; }
+.pri-section-title:first-child { margin-top:2px; }
+.priority-card { background:#1a1f28; border:1px solid #30363d; border-radius:6px; padding:7px 9px; margin-bottom:5px; }
+.priority-card:hover { border-color:#388bfd40; }
+.pc-header { display:flex; align-items:center; gap:5px; margin-bottom:4px; }
+.pc-score { font-size:10px; font-weight:700; padding:1px 5px; border-radius:3px; flex-shrink:0; min-width:28px; text-align:center; }
+.pc-name { font-size:11px; font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#e6edf3; cursor:pointer; }
+.pc-name:hover { color:#58a6ff; }
+.pc-eco { font-size:9px; color:#6e7681; flex-shrink:0; }
+.pc-dismiss { background:none; border:none; color:#6e7681; cursor:pointer; font-size:12px; padding:0 0 0 2px; flex-shrink:0; line-height:1; }
+.pc-dismiss:hover { color:#ff7b72; }
+.pc-issues { display:flex; flex-direction:column; gap:2px; margin-bottom:4px; }
+.pc-issue { font-size:10px; color:#8b949e; }
+.pc-issue.cve { color:#ff7b72; } .pc-issue.abandoned { color:#c084fc; }
+.pc-issue.outdated { color:#e3b341; } .pc-issue.confusion { color:#f97316; }
+.pc-focus { font-size:10px; padding:2px 7px; background:#1f3a5f; border:1px solid #388bfd30; border-radius:4px; color:#58a6ff; cursor:pointer; }
+.pc-focus:hover { background:#2a4a6f; }
+.pri-empty { font-size:12px; color:#6e7681; padding:20px 0; text-align:center; }
+/* ── Sources panel ── */
+#sources-btn{position:fixed;bottom:16px;right:16px;z-index:200;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:6px 12px 6px 10px;cursor:pointer;font-size:12px;font-weight:600;color:#8b949e;display:none;align-items:center;gap:6px;transition:border-color .15s;}
+#sources-btn:hover{border-color:#58a6ff;color:#e6edf3;}
+#sources-btn .sb-dot{width:8px;height:8px;border-radius:50%;background:#3fb950;flex-shrink:0;}
+#sources-btn .sb-dot.scanning{background:#e3b341;animation:pulse .8s ease-in-out infinite alternate;}
+@keyframes pulse{to{opacity:.3;}}
+#sources-panel{position:fixed;bottom:52px;right:16px;z-index:200;width:320px;background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;display:none;flex-direction:column;gap:10px;box-shadow:0 8px 24px #00000060;}
+#sources-panel h3{font-size:11px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.05em;}
+.sp-list{display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;}
+.sp-list::-webkit-scrollbar{width:3px;}.sp-list::-webkit-scrollbar-thumb{background:#30363d;}
+.sp-item{display:flex;align-items:center;gap:6px;padding:5px 8px;background:#0d1117;border-radius:5px;border:1px solid #21262d;}
+.sp-badge{font-size:10px;font-weight:600;padding:1px 5px;border-radius:8px;flex-shrink:0;}
+.sp-org{background:#1f3a5f;color:#58a6ff;}.sp-repo{background:#1a2d1a;color:#3fb950;}
+.sp-name{flex:1;font-size:11px;color:#c9d1d9;word-break:break-all;}
+.sp-rm{background:none;border:none;color:#484f58;cursor:pointer;font-size:13px;padding:1px 3px;line-height:1;}
+.sp-rm:hover{color:#f85149;}
+.sp-add-row{display:flex;gap:6px;}
+.sp-add-row input{flex:1;padding:5px 8px;background:#0d1117;border:1px solid #30363d;border-radius:5px;color:#e6edf3;font-size:12px;outline:none;}
+.sp-add-row input:focus{border-color:#58a6ff;}
+.sp-add-row button{padding:5px 10px;background:#21262d;border:1px solid #30363d;border-radius:5px;color:#e6edf3;font-size:12px;cursor:pointer;}
+.sp-add-row button:hover{background:#30363d;}
+.sp-status{font-size:11px;color:#6e7681;display:flex;align-items:center;gap:5px;}
+.sp-spinner{width:10px;height:10px;border:1.5px solid #30363d;border-top-color:#58a6ff;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<button id="sources-btn" style="display:none"><span class="sb-dot" id="sb-dot"></span><span id="sb-label">Sources</span></button>
+<div id="sources-panel">
+  <h3>Scan sources</h3>
+  <div class="sp-list" id="sp-list"></div>
+  <div class="sp-add-row">
+    <input id="sp-input" placeholder="github.com/org or org/repo" autocomplete="off">
+    <button id="sp-add-btn">Add</button>
+  </div>
+  <div class="sp-status" id="sp-status" style="display:none">
+    <div class="sp-spinner" id="sp-spinner"></div>
+    <span id="sp-status-text">Scanning…</span>
+  </div>
+</div>
+<div id="sidebar">
+  <div id="sidebar-header">
+    <h1>Dependency Graph</h1>
+    <div class="sub" id="graph-sub">Loading…</div>
+  </div>
+  <div id="import-row">
+    <button id="btn-import-repo">⊕ Import repo / folder</button>
+  </div>
+  <div id="filter-scroll">
+
+    <div id="search-wrap">
+      <input id="search" type="text" placeholder="Search name, version, repo…" autocomplete="off">
+      <div id="search-count"></div>
+    </div>
+
+    <div id="sec-usage">
+      <div class="sec-header" data-sec="usage"><span>Package usage</span><span class="sec-arrow open">›</span></div>
+      <div class="sec-body" id="body-usage">
+        <div class="slider-row">
+          <label>Min repos:</label>
+          <input type="range" id="sl-minrepos" min="1" max="91" value="1" step="1">
+          <span class="slider-val" id="sl-minrepos-val">1</span>
+        </div>
+        <div class="slider-hint" id="sl-hint">Showing all packages</div>
+      </div>
+    </div>
+
+    <!-- Security filter section (stats/overlay live in right pane) -->
+    <div id="sec-security">
+      <div class="sec-header" data-sec="security"><span>Security filters</span><span class="sec-arrow open">›</span></div>
+      <div class="sec-body" id="body-security">
+        <label class="eco-item">
+          <input type="checkbox" class="eco-cb" id="cb-cve-only">
+          <span class="eco-label">CVE packages only</span>
+        </label>
+        <label class="eco-item" style="margin-top:4px">
+          <input type="checkbox" class="eco-cb" id="cb-outdated-only">
+          <span class="eco-label">Outdated only</span>
+        </label>
+        <label class="eco-item" style="margin-top:4px">
+          <input type="checkbox" class="eco-cb" id="cb-abandoned-only">
+          <span class="eco-label">Abandoned only (2y+)</span>
+        </label>
+        <label class="eco-item" style="margin-top:4px">
+          <input type="checkbox" class="eco-cb" id="cb-confusion-only">
+          <span class="eco-label">Confusion risk only</span>
+        </label>
+        <div style="margin-top:6px">
+          <select class="filter-select" id="filter-sev" style="margin-bottom:0">
+            <option value="">All severities</option>
+            <option value="CRITICAL">Critical</option>
+            <option value="HIGH">High</option>
+            <option value="MODERATE">Moderate</option>
+            <option value="LOW">Low</option>
+            <option value="UNKNOWN">Unknown</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div id="sec-eco">
+      <div class="sec-header" data-sec="eco"><span>Ecosystems</span><span class="sec-arrow open">›</span></div>
+      <div class="sec-body" id="body-eco"><div class="eco-grid" id="eco-grid"></div></div>
+    </div>
+
+    <div id="sec-dep-edges">
+      <div class="sec-header" data-sec="dep-edges"><span>Dependency links <span id="dep-edge-badge"></span></span><span class="sec-arrow open">›</span></div>
+      <div class="sec-body" id="body-dep-edges">
+        <label class="eco-item">
+          <input type="checkbox" class="eco-cb" id="cb-dep-edges">
+          <span class="dep-edge-dot" style="background:#1d7a5f"></span>
+          <span class="eco-label">Show pkg→pkg edges</span>
+          <span class="eco-count" id="dep-edge-count"></span>
+        </label>
+        <label class="eco-item" style="margin-top:4px">
+          <input type="checkbox" class="eco-cb" id="cb-show-external">
+          <span class="dep-edge-dot" style="background:#1e2433;border:1px solid #444"></span>
+          <span class="eco-label">Show external transitive pkgs</span>
+          <span class="eco-count" id="ext-node-count"></span>
+        </label>
+        <div class="slider-hint" id="dep-edge-hint" style="margin-top:4px"></div>
+      </div>
+    </div>
+
+    <div id="sec-conflicts">
+      <div class="sec-header" data-sec="conflicts"><span>Version conflicts <span id="conflict-count-badge"></span></span><span class="sec-arrow open">›</span></div>
+      <div class="sec-body" id="body-conflicts">
+        <label class="eco-item">
+          <input type="checkbox" class="eco-cb" id="cb-conflicts-only">
+          <span class="eco-label">Conflicts only</span>
+          <span class="eco-count" id="conflict-pkg-count"></span>
+        </label>
+      </div>
+    </div>
+
+    <div id="sec-lic">
+      <div class="sec-header" data-sec="lic"><span>License</span><span class="sec-arrow open">›</span></div>
+      <div class="sec-body" id="body-lic">
+        <select class="filter-select" id="filter-lic">
+          <option value="">All licenses</option>
+          <option value="permissive">Fully Open Source (MIT, Apache, BSD…)</option>
+          <option value="weak-copyleft">Weak Copyleft (LGPL, MPL)</option>
+          <option value="copyleft">Copyleft (GPL, AGPL, EUPL)</option>
+          <option value="proprietary">Proprietary / No License</option>
+          <option value="unspecified">Unspecified (NOASSERTION)</option>
+          <option value="other">Other</option>
+        </select>
+        <div class="slider-hint" id="lic-hint" style="margin-top:0"></div>
+      </div>
+    </div>
+
+    <div id="sec-repo">
+      <div class="sec-header" data-sec="repo"><span>Repositories <span id="repo-sel-badge"></span></span><span class="sec-arrow open">›</span></div>
+      <div class="sec-body" id="body-repo">
+        <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px">
+          <input class="filter-search" id="repo-search-input" type="text" placeholder="Filter repo list…" autocomplete="off" style="flex:1;margin-bottom:0">
+          <select id="repo-sort" style="background:#161b22;border:1px solid #30363d;color:#8b949e;border-radius:4px;padding:3px 4px;font-size:10px;cursor:pointer">
+            <option value="name">A→Z</option>
+            <option value="risk">Risk ↓</option>
+          </select>
+        </div>
+        <div class="repo-list" id="repo-list"></div>
+        <div id="transitive-wrap">
+          <label class="eco-item">
+            <input type="checkbox" class="eco-cb" id="cb-transitive">
+            <span class="eco-label">Include transitive deps</span>
+          </label>
+          <div id="trans-depth-wrap" style="display:none;margin-top:4px">
+            <div class="slider-row">
+              <label>Depth:</label>
+              <input type="range" id="sl-trans-depth" min="1" max="50" value="2" step="1">
+              <span class="slider-val" id="sl-trans-depth-val">2</span>
+            </div>
+            <div class="slider-hint" id="sl-trans-hint">Direct + 2 levels transitive</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="sec-depth">
+      <div class="sec-header" data-sec="depth" style="cursor:default"><span>Depth</span></div>
+      <div class="sec-body" id="body-depth">
+        <div class="slider-row">
+          <label>Levels:</label>
+          <input type="range" id="sl-depth" min="1" max="50" value="1" step="1">
+          <span class="slider-val" id="sl-depth-val">1</span>
+        </div>
+        <div class="slider-hint" id="depth-hint">Direct packages only</div>
+      </div>
+    </div>
+
+    <div id="chips-wrap"></div>
+
+    <div id="imported-repos-sec">
+      <div class="sec-header" data-sec="imported" style="cursor:default"><span>Imported repos</span></div>
+      <div class="sec-body" id="body-imported">
+        <div id="imported-repos-list"></div>
+      </div>
+    </div>
+
+    <div class="sec-header" data-sec="stats" style="cursor:default"><span>Visible</span></div>
+    <div class="sec-body" id="body-stats"><div id="stats-body"></div></div>
+
+  </div>
+
+</div>
+
+<!-- Import modal -->
+<div id="import-modal" role="dialog" aria-modal="true" aria-label="Import repository">
+  <div id="import-box">
+    <h2>Import repository</h2>
+    <div id="import-tabs">
+      <div class="import-tab active" data-itab="url">From URL</div>
+      <div class="import-tab" data-itab="folder">From folder</div>
+    </div>
+    <div id="import-body">
+      <div id="itab-url">
+        <label class="import-label">Repository URL (GitHub, GitLab, Bitbucket)</label>
+        <input class="import-input" id="import-url" type="url" placeholder="https://github.com/owner/repo">
+        <span id="token-toggle">🔑 Add auth token (for private repos / higher rate limits)</span>
+        <div id="token-wrap">
+          <label class="import-label">Personal access token</label>
+          <input class="import-input" id="import-token" type="password" placeholder="ghp_…  or  glpat-…" autocomplete="off">
+          <label class="import-label" style="font-size:10px;color:#6e7681">Saved to localStorage. Needed for private repos; raises GitHub limit from 60→5000 req/hr.</label>
+        </div>
+      </div>
+      <div id="itab-folder" style="display:none">
+        <label class="import-label">Select project folder (all lockfiles are read recursively)</label>
+        <input class="import-input" id="import-folder" type="file" webkitdirectory multiple style="padding:4px">
+        <label class="import-label" style="margin-top:6px">Folder label (used as repo name)</label>
+        <input class="import-input" id="import-folder-name" type="text" placeholder="my-project">
+      </div>
+      <div class="import-err" id="import-err" style="display:none"></div>
+      <div id="import-progress"></div>
+    </div>
+    <div class="import-actions">
+      <button class="import-btn secondary" id="import-cancel">Cancel</button>
+      <button class="import-btn primary" id="import-submit">Import</button>
+    </div>
+  </div>
+</div>
+
+<div id="container">
+  <div class="loading" id="loading"><div class="spinner"></div><div id="loading-msg">Loading graph…</div></div>
+  <div id="sigma-container"></div>
+  <div id="focus-banner">📌 Focused — click to clear</div>
+  <div id="controls">
+    <button class="ctrl-btn" id="btn-reset">⌂ Reset view</button>
+    <button class="ctrl-btn" id="btn-zin">+</button>
+    <button class="ctrl-btn" id="btn-zout">−</button>
+  </div>
+  <div id="tooltip"><div class="t-name" id="tt-name"></div><div class="t-sub" id="tt-sub"></div></div>
+</div>
+
+<div id="right-pane">
+  <div id="history-section" style="display:none">
+    <div class="sec-header" style="padding-left:0;cursor:default"><span>Trend</span></div>
+    <svg id="sparkline" viewBox="0 0 272 40" preserveAspectRatio="none"></svg>
+    <div id="history-slider-row">
+      <input type="range" id="history-slider" min="0" value="0" step="1">
+      <span id="history-date">live</span>
+    </div>
+    <div id="history-snapshot-banner"></div>
+  </div>
+  <div class="right-tabs">
+    <div class="right-tab active" data-tab="overview">Overview</div>
+    <div class="right-tab" data-tab="priorities">Priorities</div>
+  </div>
+  <div id="tab-overview">
+  <div id="right-metrics">
+    <div class="sec-header" style="cursor:default;padding-left:0"><span>Security overview <span id="sec-badge" style="color:#ff7b72;font-size:10px;font-weight:600"></span></span></div>
+    <div id="sec-scope-label" style="font-size:9px;color:#6e7681;margin-bottom:4px"></div>
+    <div id="sec-stat-grid"></div>
+    <label class="eco-item" style="margin-top:4px">
+      <input type="checkbox" class="eco-cb" id="cb-sec-overlay" checked>
+      <span class="eco-label">Security color overlay</span>
+    </label>
+    <div class="sec-legend" id="sec-legend">
+      <div style="font-size:9px;color:#6e7681;margin-bottom:3px;font-style:italic">Color = worst risk in full chain</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#e53935"></span>CRITICAL CVE (own)</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#f97316"></span>HIGH CVE (own)</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#e3b341"></span>MEDIUM/LOW CVE (own)</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#d97706"></span>CVE in dependency chain</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#7c3aed"></span>Abandoned (own)</div>
+      <div class="leg-row"><span class="leg-dot" style="background:transparent;border:2px solid #c084fc"></span>Abandoned ring (canvas)</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#5b2a7a"></span>Abandoned in chain</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#a07800"></span>Outdated (own)</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#6e5200"></span>Outdated in chain</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#2ea04a"></span>All up to date</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#3a4a5a"></span>No registry data</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#0db7ed"></span>Container image (not OSV-auditable)</div>
+    </div>
+  </div>
+  <div id="export-row">
+    <button class="export-btn" id="btn-export-csv">⬇ CSV</button>
+    <button class="export-btn" id="btn-export-dd">⬇ DefectDojo</button>
+    <button class="export-btn" id="btn-export-graph">⬇ Graph JSON</button>
+  </div>
+  <div id="right-detail">
+    <div class="sec-header"><span>Selected</span></div>
+    <div id="detail-panel"><div class="no-sel">Click a node to inspect</div></div>
+  </div>
+  </div><!-- #tab-overview -->
+  <div id="tab-priorities">
+    <div id="priorities-scope">All visible packages</div>
+    <div id="priorities-content"></div>
+    <div id="pri-reset-row">
+      <button id="pri-reset-btn">↺ Reset dismissed</button>
+    </div>
+  </div>
+</div>
+
+<script src="lib/graphology.umd.min.js"></script>
+<script src="lib/sigma.min.js"></script>
+<script src="lib/viz-utils.js"></script>
+<script src="lib/lockfile-parsers.js"></script>
+<script src="lib/import-deps.js"></script>
+<script>
+(async () => {
+
+const ECO_COLORS = {
+  pypi:'#3776ab', npm:'#cb3837', composer:'#f28d1a', golang:'#00add8',
+  maven:'#c71a36', nuget:'#004880', swift:'#f05138', cargo:'#dea584',
+  cocoapods:'#ee3322', gem:'#cc342d', hackage:'#5e5086', hex:'#6e4a7e',
+  pub:'#0175c2', cran:'#2c7bb6', conda:'#43b02a', github:'#6e7681',
+  githubaction:'#2088ff', container:'#0db7ed', repository:'#238636', unknown:'#888888',
+};
+const SEV_COLOR = { CRITICAL:'#e53935', HIGH:'#f97316', MODERATE:'#e3b341', MEDIUM:'#e3b341', LOW:'#f0a030' };
+const SEV_RANK  = { CRITICAL:4, HIGH:3, MODERATE:2, MEDIUM:2, LOW:1, UNKNOWN:0 };
+
+// ── Load data ──────────────────────────────────────────────────────────────
+const loadMsg = document.getElementById('loading-msg');
+let graphData, secAudit = {}, transSecStatus = {};
+try {
+  loadMsg.textContent = 'Loading graph…';
+  const r = await fetch('../graph/dep_graph.json');
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  graphData = await r.json();
+} catch(e) {
+  loadMsg.textContent = `Load failed: ${e.message}. Run ./scripts/serve_viz.sh`; return;
+}
+let cveBlastRadius = {};
+let repoRiskScores = {};
+let historyData    = { snapshots: [] };
+try {
+  const r2 = await fetch('../security_audit.json');
+  if (r2.ok) {
+    const auditData = await r2.json();
+    secAudit       = auditData.packages        || {};
+    cveBlastRadius = auditData.cve_blast_radius || {};
+    repoRiskScores = auditData.repo_risk_scores || {};
+  }
+  loadMsg.textContent = 'Building graph…';
+} catch(_) { loadMsg.textContent = 'Building graph…'; }
+try {
+  const rh = await fetch('../history.json');
+  if (rh.ok) historyData = await rh.json();
+} catch(_) {}
+
+const { nodes, edges, attributes } = graphData;
+const INITIAL_RATIO = attributes._initial_camera_ratio || 0.30;
+const pkgNodes  = nodes.filter(n => n.attributes.type === 'package');
+const repoNodes = nodes.filter(n => n.attributes.type === 'repository');
+const actionsCount    = attributes.total_actions    || 0;
+const containersCount = attributes.total_containers || 0;
+document.getElementById('graph-sub').textContent =
+  `${attributes.total_repos} repos · ${attributes.total_packages?.toLocaleString()} pkgs`
+  + (actionsCount    ? ` · ${actionsCount} actions` : '')
+  + (containersCount ? ` · ${containersCount} images` : '')
+  + ` · ${attributes.generated_at?.slice(0,10)}`;
+
+// ── State ──────────────────────────────────────────────────────────────────
+const state = {
+  mode: '', minRepos: 1,
+  ecosystems: new Set(Object.keys(attributes.ecosystem_counts || {})),
+  license: '', repos: new Set(), transitive: false, transitiveDepth: 2,
+  conflictsOnly: false, cveOnly: false, outdatedOnly: false, abandonedOnly: false, confusionOnly: false,
+  minSeverity: '',
+  showPkgEdges: true, securityOverlay: true, showExternal: true,
+  focusedKey: null, focusDepth: 50, search: '',
+};
+let focusedNodes = null;
+
+// ── Build graph ────────────────────────────────────────────────────────────
+await tick();
+const graph = new graphology.Graph({ multi: false, type: 'directed' });
+nodes.forEach(n => {
+  const a = n.attributes;
+  graph.addNode(n.key, {
+    label: a.label, size: a.size || 5,
+    color: a.color || '#888', _orig_color: (a.in_org === false) ? '#2e3f52' : (a.color || '#888'),
+    x: a.x ?? 0, y: a.y ?? 0, _orig_x: a.x ?? 0, _orig_y: a.y ?? 0,
+    _type: a.type, _ecosystem: a.ecosystem, _name: a.name,
+    _version: a.version || '', _purl: a.purl || '',
+    _repos: a.repos || [], _repo_count: a.repo_count || 0,
+    _license: a.license || '', _pkg_count: a.package_count || 0,
+    _has_conflict: a.has_conflict || false, _conflict_versions: a.conflict_versions || [],
+    _dep_count: a.dep_count || 0,
+    _dep_completeness: a._dep_completeness ?? null,
+    _in_org: a.in_org !== false,  // default true; false only for external transitive nodes
+    _direct_in_repos: a.direct_in_repos || [],
+    _license_source: a.license_source || 'noassertion',
+  });
+});
+edges.forEach(e => {
+  try {
+    if (graph.hasNode(e.source) && graph.hasNode(e.target)) {
+      const t = e.attributes?.type || 'contains';
+      const isDep = t === 'depends_on';
+      const isAction = t === 'uses_action';
+      const isImage  = t === 'uses_image';
+      const color = isDep ? '#1d4e3a' : isAction ? '#1a2a4a' : isImage ? '#0a2a3a' : '#21262d';
+      graph.addEdge(e.source, e.target, { _type: t, size: isDep ? 0.3 : 0.4, color });
+    }
+  } catch(_) {}
+});
+
+// ── Usage score — node size by cross-repo frequency ────────────────────────
+// BFS from each repo: direct contains = 1.0pt, each depends_on layer = ×0.5
+const usageScore = {};
+graph.forEachNode((repoKey, attrs) => {
+  if (attrs._type !== 'repository') return;
+  const visited = new Set();
+  let frontier = new Map();
+  graph.forEachOutEdge(repoKey, (edge, eAttrs, src, tgt) => {
+    if (eAttrs._type === 'contains') frontier.set(tgt, 1.0);
+  });
+  for (let layer = 0; layer <= 10 && frontier.size > 0; layer++) {
+    const next = new Map();
+    frontier.forEach((score, key) => {
+      if (visited.has(key)) return;
+      visited.add(key);
+      usageScore[key] = (usageScore[key] || 0) + score;
+      graph.forEachOutEdge(key, (edge, eAttrs, src, tgt) => {
+        if (eAttrs._type !== 'depends_on' || visited.has(tgt)) return;
+        const ns = score * 0.5;
+        if (!next.has(tgt) || next.get(tgt) < ns) next.set(tgt, ns);
+      });
+    });
+    frontier = next;
+  }
+});
+// Map score → size (log2 scale so extremely common deps don't dominate)
+const PKG_SZ_BASE = 5, PKG_SZ_SCALE = 3, PKG_SZ_MAX = 30;
+let maxUsageScore = 0;
+graph.forEachNode((key, attrs) => {
+  if (attrs._type !== 'package') return;
+  const score = usageScore[key] || 0;
+  graph.setNodeAttribute(key, '_usage_score', score);
+  if (score > maxUsageScore) maxUsageScore = score;
+  if (score > 0) {
+    const sz = Math.min(PKG_SZ_MAX, PKG_SZ_BASE + Math.log2(1 + score) * PKG_SZ_SCALE);
+    graph.setNodeAttribute(key, 'size', sz);
+  }
+});
+
+loadMsg.textContent = 'Rendering…';
+buildTransSecMap();
+await tick();
+const renderer = new Sigma(graph, document.getElementById('sigma-container'), {
+  renderEdgeLabels: false, defaultEdgeColor: '#21262d',
+  labelFont: 'monospace', labelSize: 11, labelColor: { color: '#8b949e' },
+  minCameraRatio: 0.002, maxCameraRatio: 100,
+  nodeReducer: (node, data) => {
+    if (state.securityOverlay && data._in_org === false && data._type === 'package') {
+      const ts = transSecStatus[node];
+      if (ts === 'cve' || ts === 'abandoned' || ts === 'outdated') {
+        return { ...data, size: Math.max(data.size || 3, 6) };
+      }
+    }
+    return data;
+  },
+});
+document.getElementById('loading').style.display = 'none';
+
+// ── Abandoned node canvas overlay ──────────────────────────────────────────
+const sigmaEl = document.getElementById('sigma-container');
+sigmaEl.style.position = 'relative';
+const abandonedCanvas = document.createElement('canvas');
+abandonedCanvas.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:10;';
+sigmaEl.appendChild(abandonedCanvas);
+function resizeAbandonedCanvas() {
+  abandonedCanvas.width  = sigmaEl.offsetWidth;
+  abandonedCanvas.height = sigmaEl.offsetHeight;
+}
+resizeAbandonedCanvas();
+window.addEventListener('resize', resizeAbandonedCanvas);
+function isAbandonedNode(key, attrs) {
+  if (attrs._type === 'package') {
+    const aud = secAudit[key];
+    return aud && aud.abandoned === true;
+  }
+  if (attrs._type === 'repository') {
+    const risk = repoRiskScores[attrs._name];
+    return risk && risk.abandoned > 0;
+  }
+  return false;
+}
+function drawAbandonedOverlay() {
+  const ctx = abandonedCanvas.getContext('2d');
+  ctx.clearRect(0, 0, abandonedCanvas.width, abandonedCanvas.height);
+  if (!state.securityOverlay) return;
+  ctx.strokeStyle = '#c084fc';
+  ctx.lineWidth = 1.5;
+  graph.forEachNode((key, attrs) => {
+    if (attrs.hidden) return;
+    if (!isAbandonedNode(key, attrs)) return;
+    try {
+      const d = renderer.getNodeDisplayData(key);
+      if (!d || d.hidden) return;
+      const vp = renderer.framedGraphToViewport(d);
+      const sz = renderer.scaleSize(d.size);
+      ctx.beginPath();
+      ctx.arc(vp.x, vp.y, sz + 3, 0, Math.PI * 2);
+      ctx.stroke();
+    } catch(e) {}
+  });
+}
+renderer.on('afterRender', drawAbandonedOverlay);
+
+// Sync UI controls to initial state defaults
+document.getElementById('cb-dep-edges').checked    = state.showPkgEdges;
+document.getElementById('cb-show-external').checked = state.showExternal;
+document.getElementById('sl-depth').value          = state.focusDepth;
+updateDepthHint();
+
+// ── Repo risk score coloring ───────────────────────────────────────────────
+function riskScoreColor(score) {
+  if (score >= 75) return '#dc2626';
+  if (score >= 50) return '#d97706';
+  if (score >= 25) return '#c48f00';
+  return '#238636';
+}
+Object.entries(repoRiskScores).forEach(([repoName, risk]) => {
+  const key = `repo:${repoName}`;
+  if (!graph.hasNode(key)) return;
+  const color = riskScoreColor(risk.score);
+  graph.setNodeAttribute(key, 'color', color);
+  graph.setNodeAttribute(key, '_orig_color', color);
+  graph.setNodeAttribute(key, '_risk', risk);
+});
+
+// ── Security stats ─────────────────────────────────────────────────────────
+const secStatRow  = VizUtils.secStatRow;
+const secStatHtml = VizUtils.secStatHtml;
+
+// primaryAudits = full set (supply chain or dep chain) — drives all stats
+// subsetAudits  = smaller subset (org-only, direct-only) — shown in scope label only
+// subsetLabel   = label for the subset count ("org", "direct", …)
+function renderSecStatGrid(subsetAudits, primaryAudits, subsetLabel) {
+  const primary = (primaryAudits && primaryAudits.length >= (subsetAudits||[]).length)
+    ? primaryAudits : (subsetAudits || []);
+  const s = secStatHtml(primary);
+
+  // Header badge: total CVE IDs across full supply chain
+  document.getElementById('sec-badge').textContent =
+    s.totalCveIds ? `· ${s.totalCveIds.toLocaleString()} CVEs` : '';
+
+  // Scope label: "5,163 org · 6,591 total supply chain"
+  const scopeEl = document.getElementById('sec-scope-label');
+  const sub = subsetAudits || [];
+  if (primaryAudits && primaryAudits.length > sub.length) {
+    scopeEl.textContent =
+      `${sub.length.toLocaleString()} ${subsetLabel||'packages'} · ${primaryAudits.length.toLocaleString()} total supply chain`;
+  } else {
+    scopeEl.textContent = `${primary.length.toLocaleString()} ${subsetLabel||'packages'}`;
+  }
+
+  document.getElementById('sec-stat-grid').innerHTML = s.html;
+}
+
+// Full org supply chain: BFS from every repo via contains → depends_on (all depths).
+// orgAudits = in_org packages only; allAudits = full transitive closure.
+function renderOrgSecStats() {
+  const orgAudits = [], allAudits = [];
+  const visited = new Set();
+  // Seed: all packages directly contained by (or used as images by) any org repo
+  graph.forEachNode((repoKey, ra) => {
+    if (ra._type !== 'repository') return;
+    graph.forEachOutEdge(repoKey, (edge, ea, src, tgt) => {
+      if ((ea._type === 'contains' || ea._type === 'uses_image') && !visited.has(tgt)) visited.add(tgt);
+    });
+  });
+  // BFS through depends_on edges (all depths)
+  let frontier = [...visited];
+  while (frontier.length) {
+    const next = [];
+    frontier.forEach(k => {
+      graph.forEachOutEdge(k, (edge, ea, src, tgt) => {
+        if (ea._type === 'depends_on' && !visited.has(tgt)) {
+          visited.add(tgt); next.push(tgt);
+        }
+      });
+    });
+    frontier = next;
+  }
+  // Collect audit entries — include ALL reachable nodes; no-audit = noData sentinel
+  const NO_DATA_SENTINEL = { cve_count: 0, is_latest: null, abandoned: false };
+  visited.forEach(k => {
+    const aud = secAudit[k] || NO_DATA_SENTINEL;
+    allAudits.push(aud);
+    const a = graph.getNodeAttributes(k);
+    if (a._in_org) orgAudits.push(aud);
+  });
+  renderSecStatGrid(orgAudits, allAudits, 'org');
+}
+
+// Direct-only packages for a node (no transitive traversal).
+// Repo: contains edges only. Package: the node itself.
+function getDirectAuditArray(nodeKey) {
+  const a = graph.getNodeAttributes(nodeKey);
+  const audits = [];
+  if (a._type === 'repository') {
+    graph.forEachOutEdge(nodeKey, (edge, attrs, src, tgt) => {
+      if (attrs._type === 'contains' && secAudit[tgt]) audits.push(secAudit[tgt]);
+    });
+  } else {
+    if (secAudit[nodeKey]) audits.push(secAudit[nodeKey]);
+  }
+  return audits;
+}
+
+renderOrgSecStats();
+
+// Apply security overlay by default (state.securityOverlay = true)
+document.getElementById('sec-legend').classList.add('visible');
+applyOverlay(true);
+
+// ── History / trend ────────────────────────────────────────────────────────
+const snapshots = historyData.snapshots || [];
+if (snapshots.length > 1) {
+  const histSec    = document.getElementById('history-section');
+  const histSlider = document.getElementById('history-slider');
+  const histDate   = document.getElementById('history-date');
+  const histBanner = document.getElementById('history-snapshot-banner');
+  const sparkEl    = document.getElementById('sparkline');
+
+  histSec.style.display = 'block';
+  histSlider.max   = snapshots.length;   // index snapshots.length = "live"
+  histSlider.value = snapshots.length;   // start at live
+
+  // Draw CVE + outdated sparkline
+  function drawSparkline() {
+    const W = 272, H = 40, PAD = 2;
+    const cveVals      = snapshots.map(s => s.with_cve || 0);
+    const outdatedVals = snapshots.map(s => s.outdated || 0);
+    const maxCVE = Math.max(...cveVals, 1);
+    const maxOut = Math.max(...outdatedVals, 1);
+    const pts = (vals, maxV, col) => {
+      const n = vals.length;
+      const coords = vals.map((v, i) => {
+        const x = PAD + (i / (n - 1)) * (W - PAD * 2);
+        const y = H - PAD - (v / maxV) * (H - PAD * 2);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      });
+      return `<polyline points="${coords.join(' ')}" fill="none" stroke="${col}" stroke-width="1.5" opacity="0.8"/>`;
+    };
+    sparkEl.innerHTML = pts(cveVals, maxCVE, '#ff7b72') + pts(outdatedVals, maxOut, '#e3b341')
+      + `<text x="2" y="10" font-size="7" fill="#ff7b72">CVE</text>`
+      + `<text x="28" y="10" font-size="7" fill="#e3b341">outdated</text>`;
+  }
+  drawSparkline();
+
+  function applyHistoricalStats(idx) {
+    const isLive = idx >= snapshots.length;
+    if (isLive) {
+      histDate.textContent = 'live';
+      histBanner.style.display = 'none';
+      renderOrgSecStats();
+    } else {
+      const s = snapshots[idx];
+      histDate.textContent = s.date;
+      histBanner.style.display = 'block';
+      histBanner.textContent = `Showing snapshot: ${s.date}`;
+      // Render historical stats directly into the grid (bypass live data)
+      const t = s.total_packages || 0;
+      document.getElementById('sec-badge').textContent = s.with_cve ? `· ${s.with_cve} CVEs` : '';
+      document.getElementById('sec-scope-label').textContent = `${t.toLocaleString()} packages · snapshot ${s.date}`;
+      document.getElementById('sec-stat-grid').innerHTML =
+        `<div style="font-size:10px;color:#6e7681;margin-bottom:5px">${t.toLocaleString()} packages audited</div>` +
+        secStatRow('#ff7b72', 'With CVEs', s.with_cve||0, t) +
+        secStatRow('#c084fc', 'Abandoned', s.abandoned||0, t) +
+        secStatRow('#e3b341', 'Outdated',  s.outdated||0,  t);
+    }
+  }
+
+  histSlider.addEventListener('input', () => applyHistoricalStats(+histSlider.value));
+}
+
+// ── Exports ────────────────────────────────────────────────────────────────
+function downloadBlob(content, filename, mime) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], {type: mime}));
+  a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+document.getElementById('btn-export-csv').onclick = () => {
+  const headers = ['name','version','ecosystem','repos','cve_count','max_severity','max_cvss',
+                   'license','is_latest','last_release','abandoned','confusion_risk','purl'];
+  const rows = [...visibleSet]
+    .filter(k => graph.getNodeAttribute(k,'_type')==='package' && graph.getNodeAttribute(k,'_in_org'))
+    .map(k => {
+      const a = graph.getNodeAttributes(k);
+      const d = secAudit[k] || {};
+      return [a._name, a._version, a._ecosystem, (a._repos||[]).join('|'),
+              d.cve_count??'', d.max_severity??'', d.max_cvss??'',
+              a._license, d.is_latest??'', d.last_release??'',
+              d.abandoned?'yes':'no', d.confusion_risk?'yes':'no', k];
+    });
+  const csv = [headers, ...rows]
+    .map(r => r.map(v => `"${String(v??'').replace(/"/g,'""')}"`).join(','))
+    .join('\n');
+  downloadBlob(csv, `sbom-packages-${new Date().toISOString().slice(0,10)}.csv`, 'text/csv');
+};
+
+document.getElementById('btn-export-dd').onclick = () => {
+  const findings = [];
+  [...visibleSet].forEach(k => {
+    const a = graph.getNodeAttributes(k);
+    if (a._type !== 'package' || !a._in_org) return;
+    const d = secAudit[k];
+    if (!d?.vulns?.length) return;
+    d.vulns.forEach(v => {
+      const sev = v.severity ? v.severity.charAt(0) + v.severity.slice(1).toLowerCase() : 'Info';
+      findings.push({
+        title:            `${v.alias||v.id} in ${a._name}@${a._version}`,
+        date:             new Date().toISOString().slice(0,10),
+        severity:         sev,
+        description:      v.summary || '',
+        mitigation:       v.fixed ? `Upgrade to ${v.fixed}` : 'No fix available',
+        impact:           `Affects ${(a._repos||[]).length} repository/repositories`,
+        references:       v.url || `https://osv.dev/vulnerability/${v.id}`,
+        active:           true, verified: false, false_p: false, duplicate: false,
+        out_of_scope:     false, static_finding: true, dynamic_finding: false,
+        component_name:   a._name,
+        component_version: a._version,
+        cve:              v.alias || v.id,
+        cvssv3_score:     v.cvss_score ?? null,
+        tags:             a._repos || [],
+      });
+    });
+  });
+  downloadBlob(JSON.stringify({findings}, null, 2),
+    `defectdojo-${new Date().toISOString().slice(0,10)}.json`, 'application/json');
+};
+
+// ── Graph JSON export ──────────────────────────────────────────────────────
+document.getElementById('btn-export-graph').onclick = () => ImportDeps.exportAugmentedGraph(graph, secAudit);
+
+// ── Import modal ───────────────────────────────────────────────────────────
+const importModal   = document.getElementById('import-modal');
+const importProgress= document.getElementById('import-progress');
+const importErr     = document.getElementById('import-err');
+const importSubmit  = document.getElementById('import-submit');
+let activeImportTab = 'url';
+
+// Tab switching
+document.querySelectorAll('.import-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.import-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    activeImportTab = tab.dataset.itab;
+    document.getElementById('itab-url').style.display    = activeImportTab === 'url'    ? '' : 'none';
+    document.getElementById('itab-folder').style.display = activeImportTab === 'folder' ? '' : 'none';
+  });
+});
+
+// Token toggle
+document.getElementById('token-toggle').addEventListener('click', () => {
+  const wrap = document.getElementById('token-wrap');
+  wrap.style.display = wrap.style.display === 'none' ? '' : 'none';
+});
+
+// Restore saved token
+const savedToken = localStorage.getItem('sbom-import-token');
+if (savedToken) {
+  document.getElementById('import-token').value = savedToken;
+  document.getElementById('token-wrap').style.display = '';
+}
+
+document.getElementById('btn-import-repo').addEventListener('click', () => {
+  importProgress.textContent = '';
+  importProgress.classList.remove('visible');
+  importErr.style.display = 'none';
+  importModal.classList.add('open');
+});
+document.getElementById('import-cancel').addEventListener('click', () => importModal.classList.remove('open'));
+importModal.addEventListener('click', e => { if (e.target === importModal) importModal.classList.remove('open'); });
+
+function importLog(msg) {
+  importProgress.classList.add('visible');
+  importProgress.textContent += msg + '\n';
+  importProgress.scrollTop = importProgress.scrollHeight;
+}
+
+function showImportErr(msg) {
+  importErr.textContent = msg;
+  importErr.style.display = 'block';
+}
+
+// Collect repo angles from existing repo nodes for placement
+function getExistingRepoAngles() {
+  const angles = [];
+  graph.forEachNode((key, attrs) => {
+    if (attrs._type === 'repository') {
+      angles.push(Math.atan2(attrs.y || 0, attrs.x || 0));
+    }
+  });
+  return angles;
+}
+
+// Inject imported graph nodes + edges + audit into live graph
+function injectImportedGraph(importedG, importedAudit) {
+  const existingAngles = getExistingRepoAngles();
+  const { nodes, edges } = importedG;
+
+  for (const node of nodes) {
+    if (graph.hasNode(node.key)) continue;
+    graph.addNode(node.key, node.attributes);
+  }
+  for (const edge of edges) {
+    if (!graph.hasNode(edge.source) || !graph.hasNode(edge.target)) continue;
+    if (!graph.hasEdge(edge.key)) {
+      try { graph.addEdgeWithKey(edge.key, edge.source, edge.target, edge.attributes); } catch(_) {}
+    }
+  }
+  Object.assign(secAudit, importedAudit);
+
+  // Recompute max usage score (imported nodes start at 0, so won't shrink max)
+  // Apply security overlay colours to new pkg nodes
+  applyOverlay(state.securityOverlay);
+  applyFilters();
+}
+
+function addImportedRepoChip(label, repoKey) {
+  const list = document.getElementById('imported-repos-list');
+  document.getElementById('imported-repos-sec').style.display = '';
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:2px 0;';
+  row.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:#7c3aed;flex-shrink:0"></span>
+    <span style="flex:1;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(label)}</span>
+    <button style="background:none;border:none;color:#6e7681;cursor:pointer;font-size:11px;padding:0" title="Focus" data-key="${escHtml(repoKey)}">⊙</button>`;
+  row.querySelector('button').addEventListener('click', e => setFocus(e.target.dataset.key));
+  list.appendChild(row);
+}
+
+document.getElementById('import-submit').addEventListener('click', async () => {
+  importErr.style.display = 'none';
+  importProgress.textContent = '';
+  importProgress.classList.add('visible');
+  importSubmit.disabled = true;
+
+  try {
+    let label, pkgs;
+
+    if (activeImportTab === 'url') {
+      const url   = document.getElementById('import-url').value.trim();
+      const token = document.getElementById('import-token').value.trim();
+      if (!url) { showImportErr('Enter a repository URL.'); return; }
+      if (token) localStorage.setItem('sbom-import-token', token);
+      const parsed = ImportDeps.parseRepoUrl(url);
+      if (!parsed) { showImportErr('Cannot parse URL. Supported: GitHub, GitLab, Bitbucket.'); return; }
+
+      importLog(`Importing from ${parsed.host}: ${parsed.owner}/${parsed.repo}`);
+      const result = await ImportDeps.fetchRepoLockfiles(url, token || null, importLog);
+      label = result.label;
+      pkgs  = result.pkgs;
+
+    } else {
+      const files  = document.getElementById('import-folder').files;
+      label = (document.getElementById('import-folder-name').value.trim()) ||
+              (files[0]?.webkitRelativePath?.split('/')[0]) || 'local-project';
+      if (!files.length) { showImportErr('Select a folder first.'); return; }
+      pkgs = await ImportDeps.parseFolderFiles(files, importLog);
+    }
+
+    if (!pkgs.length) { showImportErr('No lockfile packages found.'); return; }
+    importLog(`\nRunning security audit for ${pkgs.length} packages…`);
+
+    const importedAudit = await ImportDeps.buildImportedAudit(pkgs, importLog);
+    const host = activeImportTab === 'folder' ? 'local' : ImportDeps.parseRepoUrl(
+      document.getElementById('import-url').value
+    )?.host || 'git';
+
+    const importedG = ImportDeps.buildImportedGraph(label, host, pkgs, getExistingRepoAngles());
+    injectImportedGraph(importedG, importedAudit);
+    addImportedRepoChip(label, importedG.repoKey);
+
+    const withCVE = Object.values(importedAudit).filter(a => a.cve_count > 0).length;
+    importLog(`\nDone. ${pkgs.length} packages | ${withCVE} with CVEs — repo added to graph.`);
+    setTimeout(() => importModal.classList.remove('open'), 1800);
+
+  } catch (e) {
+    showImportErr(e.message || String(e));
+    importLog(`Error: ${e.message}`);
+  } finally {
+    importSubmit.disabled = false;
+  }
+});
+
+// ── Eco checkboxes ─────────────────────────────────────────────────────────
+const ecoGrid = document.getElementById('eco-grid');
+const ecoCounts = attributes.ecosystem_counts || {};
+Object.entries(ecoCounts).sort((a,b)=>b[1]-a[1]).forEach(([eco,cnt]) => {
+  const color = ECO_COLORS[eco] || '#888';
+  const row = document.createElement('label'); row.className='eco-item';
+  row.innerHTML = `<input type="checkbox" class="eco-cb" data-eco="${eco}" checked>
+    <span class="eco-dot" style="background:${color}"></span>
+    <span class="eco-label">${eco}</span>
+    <span class="eco-count">${cnt}</span>`;
+  ecoGrid.appendChild(row);
+});
+
+// Dep edge info
+const containsCount = attributes.total_contains_edges || 0;
+const dependsCount  = attributes.total_depends_edges  || 0;
+const externalCount = pkgNodes.filter(n => n.attributes.in_org === false).length;
+document.getElementById('dep-edge-badge').textContent = `(${dependsCount.toLocaleString()})`;
+document.getElementById('dep-edge-count').textContent = dependsCount.toLocaleString();
+document.getElementById('dep-edge-hint').textContent  = `Coverage: ${attributes.cdx_repos_with_deps}/${attributes.total_repos} repos via CDX + registry enrichment`;
+document.getElementById('ext-node-count').textContent = externalCount ? `${externalCount}` : '0';
+
+// Version conflicts
+const totalConflictNames = attributes.total_version_conflicts || 0;
+document.getElementById('conflict-count-badge').textContent = totalConflictNames ? `(${totalConflictNames})` : '';
+document.getElementById('conflict-pkg-count').textContent   = pkgNodes.filter(n=>n.attributes.has_conflict).length || '';
+
+// License category helper
+const licenseCategory = VizUtils.licenseCategory;
+
+// License dropdown — show per-category counts
+const licSel = document.getElementById('filter-lic');
+const licHint = document.getElementById('lic-hint');
+const catLabels = {
+  permissive: 'Fully Open Source', copyleft: 'Copyleft',
+  'weak-copyleft': 'Weak Copyleft', proprietary: 'Proprietary / No License',
+  unspecified: 'Unspecified', other: 'Other',
+};
+const catCounts = {};
+pkgNodes.forEach(n => { const cat=licenseCategory(n.attributes.license||''); catCounts[cat]=(catCounts[cat]||0)+1; });
+// Patch option text to show counts
+licSel.querySelectorAll('option[value]').forEach(o => {
+  if(o.value && catCounts[o.value]) o.textContent += ` (${catCounts[o.value]})`;
+});
+licSel.addEventListener('change', () => {
+  state.license = licSel.value;
+  licHint.textContent = licSel.value ? `Showing: ${catLabels[licSel.value]||licSel.value}` : '';
+  applyFilters();
+});
+
+// Repo list
+const repoListEl  = document.getElementById('repo-list');
+const repoSearchEl= document.getElementById('repo-search-input');
+const repoSortEl  = document.getElementById('repo-sort');
+const allRepoNames= repoNodes.map(n=>n.attributes.name).sort();
+function buildRepoList(filter) {
+  repoListEl.innerHTML = '';
+  const q    = (filter||'').toLowerCase();
+  const sort = repoSortEl.value;
+  let names  = allRepoNames.filter(r=>!q||r.toLowerCase().includes(q));
+  if (sort === 'risk') {
+    names = [...names].sort((a,b) => (repoRiskScores[b]?.score||0) - (repoRiskScores[a]?.score||0));
+  }
+  names.forEach(name => {
+    const item=document.createElement('div'); item.className='repo-item';
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.className='repo-cb'; cb.dataset.repo=name; cb.checked=state.repos.has(name); cb.id=`rcb-${name}`;
+    const lbl=document.createElement('label'); lbl.htmlFor=`rcb-${name}`; lbl.style.cssText='flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'; lbl.textContent=name;
+    item.appendChild(cb); item.appendChild(lbl);
+    const risk = repoRiskScores[name];
+    if (risk) {
+      const badge = document.createElement('span');
+      badge.textContent = Math.round(risk.score);
+      badge.title = `Risk score ${risk.score}/100 · ${risk.critical} crit · ${risk.high} high · ${risk.outdated} outdated`;
+      badge.style.cssText = `font-size:9px;padding:1px 4px;border-radius:3px;margin-left:4px;flex-shrink:0;color:#fff;background:${riskScoreColor(risk.score)}`;
+      item.appendChild(badge);
+    }
+    cb.addEventListener('change', () => {
+      if(cb.checked) state.repos.add(name); else state.repos.delete(name);
+      updateRepoBadge(); updateTransitiveVis(); applyFilters();
+    });
+    repoListEl.appendChild(item);
+  });
+}
+buildRepoList('');
+repoSearchEl.addEventListener('input', e=>buildRepoList(e.target.value));
+repoSortEl.addEventListener('change', ()=>buildRepoList(repoSearchEl.value));
+function updateRepoBadge() {
+  const b=document.getElementById('repo-sel-badge');
+  if(state.repos.size>0){b.textContent=`${state.repos.size} selected`;b.style.display='inline';}
+  else b.style.display='none';
+}
+function updateTransitiveVis() {
+  document.getElementById('transitive-wrap').style.display = state.repos.size>0 ? 'block' : 'none';
+}
+
+// ── Security overlay ───────────────────────────────────────────────────────
+/**
+ * Build transSecStatus: for each package node, the worst security status
+ * across itself AND all transitive depends_on descendants.
+ * Priority: cve > abandoned > outdated > ok > noData
+ * Uses memoisation + early-exit so it runs in O(V+E).
+ */
+function buildTransSecMap() {
+  const RANK = { cve: 4, abandoned: 3, outdated: 2, ok: 1, noData: 0 };
+  const NAMES = ['noData', 'ok', 'outdated', 'abandoned', 'cve'];
+  function ownRank(key) {
+    const d = secAudit[key];
+    if (!d) return 0;
+    if (d.cve_count > 0)       return 4;
+    if (d.abandoned)            return 3;
+    if (d.is_latest === false)  return 2;
+    if (d.is_latest === true)   return 1;
+    return 0;
+  }
+  const memo = {};
+  graph.forEachNode((startKey, sa) => {
+    if (sa._type !== 'package' || memo[startKey] !== undefined) return;
+    const visited = new Set([startKey]);
+    let worst = ownRank(startKey);
+    const queue = [startKey];
+    while (queue.length && worst < 4) {
+      const cur = queue.shift();
+      graph.forEachOutEdge(cur, (edge, ea, src, tgt) => {
+        if (ea._type !== 'depends_on' || visited.has(tgt)) return;
+        visited.add(tgt);
+        if (memo[tgt] !== undefined) {
+          const r = RANK[memo[tgt]];
+          if (r > worst) worst = r;
+        } else {
+          const r = ownRank(tgt);
+          if (r > worst) worst = r;
+          queue.push(tgt);
+        }
+      });
+    }
+    memo[startKey] = NAMES[worst];
+  });
+  transSecStatus = memo;
+}
+
+function secColor(purl) {
+  const d  = secAudit[purl];
+  const ts = transSecStatus[purl];
+  const inOrg = !graph.hasNode(purl) || graph.getNodeAttribute(purl, '_in_org') !== false;
+
+  // Containers: OSV has no container namespace — preserve ecosystem color, signal "not auditable"
+  if (graph.hasNode(purl) && graph.getNodeAttribute(purl, '_ecosystem') === 'container') {
+    return graph.getNodeAttribute(purl, '_orig_color') || '#0d4a5a';
+  }
+
+  // Own CVEs → severity-keyed red
+  if (d && d.cve_count > 0) return SEV_COLOR[d.max_severity] || '#f0a030';
+
+  // Transitive CVE only (own is clean) → orange-amber: "chain danger"
+  if (ts === 'cve') return '#d97706';
+
+  // Own abandoned → vivid purple
+  if (d && d.abandoned) return inOrg ? '#6d28d9' : '#7c3aed';
+  // Transitive abandoned only → muted purple
+  if (ts === 'abandoned') return inOrg ? '#4a1f5a' : '#5b2a7a';
+
+  // Own outdated → amber
+  if (d && d.is_latest === false) return inOrg ? '#7a5c00' : '#a07800';
+  // Transitive outdated only → darker amber
+  if (ts === 'outdated') return inOrg ? '#5a4000' : '#6e5200';
+
+  // All ok (own + chain) → green
+  if (ts === 'ok') return inOrg ? '#1f7a3a' : '#2ea04a';
+
+  // No data
+  return inOrg ? '#2a2a2a' : '#3a4a5a';
+}
+function applyOverlay(on) {
+  graph.forEachNode((key, a) => {
+    if (a._type !== 'package') return;
+    graph.setNodeAttribute(key, 'color', on ? secColor(key) : a._orig_color);
+  });
+  renderer.refresh();
+}
+document.getElementById('cb-sec-overlay').addEventListener('change', e => {
+  state.securityOverlay = e.target.checked;
+  document.getElementById('sec-legend').classList.toggle('visible', e.target.checked);
+  applyOverlay(e.target.checked);
+});
+
+// ── BFS helpers ────────────────────────────────────────────────────────────
+// depNeighbors: only follow depends_on edges (not contains) from a node
+function depNeighbors(nodeKey) {
+  const out = [];
+  graph.forEachOutEdge(nodeKey, (edge, attrs, src, tgt) => {
+    if (attrs._type === 'depends_on') out.push(tgt);
+  });
+  return out;
+}
+// depInNeighbors: reverse — packages that depend ON this node
+function depInNeighbors(nodeKey) {
+  const out = [];
+  graph.forEachInEdge(nodeKey, (edge, attrs, src) => {
+    if (attrs._type === 'depends_on') out.push(src);
+  });
+  return out;
+}
+
+function bfsFromNodes(seeds, maxDepth) {
+  return VizUtils.bfsFromNodes(
+    seeds, maxDepth,
+    node => graph.getNodeAttribute(node, '_type') === 'repository'
+      ? graph.outNeighbors(node)
+      : depNeighbors(node),
+    k => graph.hasNode(k)
+  );
+}
+
+// ── Dep chain audit ────────────────────────────────────────────────────────
+// ── Version helpers ────────────────────────────────────────────────────────
+const verTuple  = VizUtils.verTuple;
+const verAhead  = VizUtils.verAhead;
+const majorGap  = VizUtils.majorGap;
+
+function buildDepChainAudit(startKey, maxDepth) {
+  const levels = [];
+  const visited = new Set([startKey]);
+  let frontier = [startKey];
+  for (let d=0; d<=maxDepth; d++) {
+    const withCVE=[], abandoned=[], outdated=[], ok=[], noData=[];
+    frontier.forEach(k => {
+      if(k===startKey && d===0) return; // skip self at depth 0 (shown separately)
+      const aud = secAudit[k];
+      const na  = graph.getNodeAttributes(k);
+      if(!aud){ noData.push({k,na}); return; }
+      const gap = majorGap(na._version, aud.latest_version);
+      if(aud.cve_count>0)           withCVE.push({k,na,aud,gap});
+      else if(aud.is_latest===false) outdated.push({k,na,aud,gap});
+      else if(aud.abandoned===true)  abandoned.push({k,na,aud,gap:0});
+      else ok.push({k,na,aud,gap:0});
+    });
+    levels.push({ depth:d, total: d===0 ? 1 : frontier.length, withCVE, abandoned, outdated, ok, noData });
+    const next=[];
+    frontier.forEach(k => depNeighbors(k).forEach(n=>{ if(!visited.has(n)){visited.add(n);next.push(n);}}));
+    if(!next.length) break;
+    frontier=next;
+  }
+  return { levels, totalReachable: visited.size };
+}
+
+function renderChainAudit(startKey) {
+  const MAX_DEPTH = 50;
+  const { levels, totalReachable } = buildDepChainAudit(startKey, MAX_DEPTH);
+  if (levels.length <= 1 && levels[0]?.total <= 1) return '';
+
+  // External supply chain CVE summary
+  const extCveItems = levels.flatMap(l => l.withCVE.filter(({na}) => !na._in_org));
+  const extAbandonedItems = levels.flatMap(l => l.abandoned.filter(({na}) => !na._in_org));
+  const extOutdatedItems = levels.flatMap(l => l.outdated.filter(({na}) => !na._in_org));
+  const extSummary = (extCveItems.length || extAbandonedItems.length || extOutdatedItems.length) ? `
+    <div style="margin-bottom:8px;padding:6px 8px;background:#161b22;border:1px solid #ff7b7233;border-radius:6px;font-size:11px">
+      <div style="color:#8b949e;font-weight:600;margin-bottom:4px">⛓ External supply chain risks</div>
+      ${extCveItems.length ? `<div style="color:#ff7b72;margin-bottom:2px">⚠ ${extCveItems.length} external dep${extCveItems.length!==1?'s':''} with CVEs: ${extCveItems.slice(0,4).map(({k,na,aud})=>`<span class="tag dep-tag" data-key="${escHtml(k)}" style="font-size:9px">${escHtml(na.label)} <span class="sev sev-${aud.max_severity||'UNKNOWN'}" style="font-size:8px">${aud.max_severity||'?'}</span></span>`).join('')}${extCveItems.length>4?`<span style="color:#8b949e">+${extCveItems.length-4} more</span>`:''}</div>` : ''}
+      ${extAbandonedItems.length ? `<div style="color:#c084fc;margin-bottom:2px">💤 ${extAbandonedItems.length} external abandoned</div>` : ''}
+      ${extOutdatedItems.length ? `<div style="color:#e3b341">⚡ ${extOutdatedItems.length} external outdated</div>` : ''}
+    </div>` : '';
+
+  const rows = levels.map((l, i) => {
+    if(i===0) return ''; // skip self (shown in main section)
+    const label = i===1 ? `Direct deps` : `Level ${i} transitive`;
+    const total = l.total;
+    if(!total) return '';
+
+    const breakingCount = [...l.withCVE,...l.outdated].filter(x=>x.gap>0).length;
+    const badges = [
+      l.withCVE.length   ? `<span class="sev sev-${l.withCVE[0].aud.max_severity||'UNKNOWN'}">⚠ ${l.withCVE.length} CVE</span>` : '',
+      l.abandoned.length ? `<span style="color:#c084fc;font-size:10px">💤 ${l.abandoned.length} abandoned</span>` : '',
+      l.outdated.length  ? `<span style="color:#e3b341;font-size:10px">⚡ ${l.outdated.length} outdated</span>` : '',
+      breakingCount      ? `<span style="color:#f97316;font-size:10px">⛔ ${breakingCount} breaking</span>` : '',
+      l.ok.length        ? `<span style="color:#3fb950;font-size:10px">✓ ${l.ok.length}</span>` : '',
+    ].filter(Boolean).join(' ');
+
+    const extCount = [...l.withCVE,...l.abandoned,...l.outdated,...l.ok,...l.noData].filter(({k,na})=>!na._in_org).length;
+    const SHOW = 5;
+    const allIssues = [...l.withCVE, ...l.abandoned, ...l.outdated];
+    const shownIssues = allIssues.slice(0, SHOW);
+    const moreIssues  = allIssues.slice(SHOW);
+    const moreCount   = moreIssues.length;
+
+    function issueRow({k,na,aud,gap}) {
+      const pkgTag = `<span class="tag dep-tag" data-key="${escHtml(k)}">${escHtml(na.label)}${!na._in_org?` <span style="color:#8b949e;font-size:9px">(ext)</span>`:''}</span>`;
+      if (aud.cve_count > 0) {
+        const vulnItems = (aud.vulns||[]).slice(0,3).map(renderCVEItem).join('');
+        const moreVulns = aud.cve_count > 3 ? `<div style="font-size:10px;color:#8b949e;margin-top:2px">+${aud.cve_count-3} more CVEs</div>` : '';
+        const breakInfo = (gap||0)>0 ? `<div style="font-size:9px;color:#f97316;margin-top:2px">⛔ Fix requires breaking upgrade (${na._version||'?'} → ${aud.latest_version})</div>` : '';
+        return `<div class="chain-issue-cve" style="border-left:2px solid #ff7b7225">
+          <div style="margin-bottom:4px">${pkgTag}</div>
+          ${vulnItems}${moreVulns}${breakInfo}
+        </div>`;
+      }
+      const isBreaking = (gap||0) > 0;
+      const label = aud.abandoned===true
+        ? `<span style="color:#c084fc;font-size:9px">ABANDONED</span>`
+        : isBreaking
+          ? `<span style="color:#f97316;font-size:9px">BREAKING</span>`
+          : `<span style="color:#e3b341;font-size:9px">OUTDATED</span>`;
+      const upgradeInfo = aud.is_latest===false && aud.latest_version && aud.abandoned!==true
+        ? `<span style="color:#6e7681">→ ${escHtml(aud.latest_version)}${isBreaking?` <span style="color:#f97316">(+${gap} major)</span>`:''}</span>`
+        : '';
+      return `<div class="chain-issue">
+        ${label}
+        <span class="chain-pkg-name">${pkgTag}</span>
+        ${aud.abandoned===true && aud.last_release ? `<span style="color:#6e7681">last: ${escHtml(aud.last_release)}</span>` : ''}
+        ${upgradeInfo}
+      </div>`;
+    }
+
+    return `<div class="chain-level">
+      <div class="chain-level-hdr">
+        <span class="chain-level-label">${label}</span>
+        <span class="chain-level-count">${total} pkg${total!==1?'s':''}${extCount?` <span style="color:#8b949e;font-size:9px">(${extCount} ext)</span>`:''}</span>
+        ${badges}
+      </div>
+      ${shownIssues.map(issueRow).join('')}
+      ${moreCount>0 ? `<div class="chain-more" data-total="${moreCount}">+${moreCount} more with issues</div>
+        <div class="chain-more-items" style="display:none">${moreIssues.map(issueRow).join('')}</div>` : ''}
+    </div>`;
+  }).filter(Boolean).join('');
+
+  if (!rows && !extSummary) return '';
+  return `<div class="async-section">
+    <div class="async-title">Full dep chain audit (${totalReachable} pkgs total)</div>
+    ${extSummary}
+    ${rows}
+  </div>`;
+}
+
+// ── Reverse dep chain (Z→A): who pulls this package in? ───────────────────
+function buildReverseChain(startKey, maxDepth) {
+  const visited  = new Set([startKey]);
+  let frontier   = [startKey];
+  const levels   = [];
+  const allRepos = new Set();
+
+  // Also capture repos that directly contain the start node
+  graph.forEachInEdge(startKey, (edge, attrs, src) => {
+    if (attrs._type === 'contains') {
+      const sa = graph.getNodeAttributes(src);
+      if (sa._type === 'repository') allRepos.add(sa._name);
+    }
+  });
+
+  for (let d = 0; d < maxDepth; d++) {
+    const next = [], levelPkgs = [];
+    frontier.forEach(k => {
+      depInNeighbors(k).forEach(p => {
+        if (visited.has(p)) return;
+        visited.add(p); next.push(p);
+        const pa = graph.getNodeAttributes(p);
+        levelPkgs.push({ k: p, na: pa });
+        (pa._repos || []).forEach(r => allRepos.add(r));
+      });
+    });
+    if (levelPkgs.length) levels.push({ depth: d + 1, pkgs: levelPkgs });
+    frontier = next;
+    if (!next.length) break;
+  }
+  return { levels, repos: [...allRepos] };
+}
+
+function renderReverseChain(nodeKey) {
+  const na = graph.getNodeAttributes(nodeKey);
+  const { levels, repos } = buildReverseChain(nodeKey, 50);
+  const isExternal = !na._in_org;
+
+  if (!levels.length && !repos.length) {
+    return isExternal
+      ? `<div class="async-section"><div class="async-title">Pulled in by ↑</div><span style="color:#8b949e;font-size:11px">No org packages depend on this</span></div>`
+      : '';
+  }
+
+  const reposHtml = repos.length
+    ? `<div class="dep-section"><div class="dep-section-title">Responsible repos (${repos.length})</div>
+       <div class="tag-list">${repos.slice(0,8).map(r=>`<span class="tag rev-repo-tag" data-repo="${escHtml(r)}">${escHtml(r)}</span>`).join('')}
+       ${repos.length>8?`<span style="font-size:10px;color:#8b949e">+${repos.length-8} more</span>`:''}</div></div>`
+    : '';
+
+  const SHOW = 5;
+  const levelsHtml = levels.map(l => {
+    const withCVE = [], abandoned = [], outdated = [], ok = [], noData = [];
+    l.pkgs.forEach(({k, na: pa}) => {
+      const aud = secAudit[k];
+      if (!aud) { noData.push({k, na: pa}); return; }
+      const gap = majorGap(pa._version, aud.latest_version);
+      if (aud.cve_count > 0)           withCVE.push({k, na: pa, aud, gap});
+      else if (aud.is_latest === false) outdated.push({k, na: pa, aud, gap});
+      else if (aud.abandoned === true)  abandoned.push({k, na: pa, aud, gap:0});
+      else ok.push({k, na: pa, aud, gap:0});
+    });
+    const revBreakingCount = [...withCVE,...outdated].filter(x=>x.gap>0).length;
+    const badges = [
+      withCVE.length   ? `<span class="sev sev-${withCVE[0].aud.max_severity||'UNKNOWN'}">⚠ ${withCVE.length} CVE</span>` : '',
+      abandoned.length ? `<span style="color:#c084fc;font-size:10px">💤 ${abandoned.length} abandoned</span>` : '',
+      outdated.length  ? `<span style="color:#e3b341;font-size:10px">⚡ ${outdated.length} outdated</span>` : '',
+      revBreakingCount ? `<span style="color:#f97316;font-size:10px">⛔ ${revBreakingCount} breaking</span>` : '',
+      ok.length        ? `<span style="color:#3fb950;font-size:10px">✓ ${ok.length}</span>` : '',
+      noData.length    ? `<span style="color:#6e7681;font-size:10px">— ${noData.length} no data</span>` : '',
+    ].filter(Boolean).join(' ');
+
+    function issueRow({k, na: pa, aud, gap}) {
+      const pkgTag = `<span class="tag dep-tag" data-key="${escHtml(k)}">${escHtml(pa.label||k)}</span>`;
+      if (aud.cve_count > 0) {
+        const vulnItems = (aud.vulns||[]).slice(0,3).map(renderCVEItem).join('');
+        const moreVulns = aud.cve_count > 3 ? `<div style="font-size:10px;color:#8b949e;margin-top:2px">+${aud.cve_count-3} more CVEs</div>` : '';
+        const breakInfo = (gap||0)>0 ? `<div style="font-size:9px;color:#f97316;margin-top:2px">⛔ Fix requires breaking upgrade (${pa._version||'?'} → ${aud.latest_version})</div>` : '';
+        return `<div class="chain-issue-cve" style="border-left:2px solid #ff7b7225">
+          <div style="margin-bottom:4px">${pkgTag}</div>
+          ${vulnItems}${moreVulns}${breakInfo}
+        </div>`;
+      }
+      const isBreaking = (gap||0) > 0;
+      const label = aud.abandoned===true
+        ? `<span style="color:#c084fc;font-size:9px">ABANDONED</span>`
+        : isBreaking
+          ? `<span style="color:#f97316;font-size:9px">BREAKING</span>`
+          : `<span style="color:#e3b341;font-size:9px">OUTDATED</span>`;
+      const upgradeInfo = aud.is_latest===false && aud.latest_version && aud.abandoned!==true
+        ? `<span style="color:#6e7681">→ ${escHtml(aud.latest_version)}${isBreaking?` <span style="color:#f97316">(+${gap} major)</span>`:''}</span>`
+        : '';
+      return `<div class="chain-issue">
+        ${label}
+        <span class="chain-pkg-name">${pkgTag}</span>
+        ${aud.abandoned===true && aud.last_release ? `<span style="color:#6e7681">last: ${escHtml(aud.last_release)}</span>` : ''}
+        ${upgradeInfo}
+      </div>`;
+    }
+
+    const issues = [...withCVE, ...abandoned, ...outdated];
+    const shownIssues = issues.slice(0, SHOW);
+    const moreIssues  = issues.slice(SHOW);
+    const moreCount   = moreIssues.length;
+
+    return `<div class="chain-level">
+      <div class="chain-level-hdr">
+        <span class="chain-level-label">Level ${l.depth} upstream</span>
+        <span class="chain-level-count">${l.pkgs.length} pkg${l.pkgs.length!==1?'s':''}</span>
+        ${badges}
+      </div>
+      ${shownIssues.map(issueRow).join('')}
+      ${moreCount>0 ? `<div class="chain-more" data-total="${moreCount}">+${moreCount} more with issues</div>
+        <div class="chain-more-items" style="display:none">${moreIssues.map(issueRow).join('')}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  const totalPkgs = levels.reduce((s,l)=>s+l.pkgs.length, 0);
+  return `<div class="async-section">
+    <div class="async-title">Pulled in by ↑ (${totalPkgs} upstream pkg${totalPkgs!==1?'s':''})</div>
+    ${reposHtml}${levelsHtml}
+  </div>`;
+}
+
+// ── Filters ────────────────────────────────────────────────────────────────
+function pkgFiltersActive() {
+  return state.cveOnly || state.outdatedOnly || state.abandonedOnly || state.confusionOnly ||
+         !!state.minSeverity || state.conflictsOnly || !!state.license ||
+         state.ecosystems.size < Object.keys(ecoCounts).length;
+}
+
+// Remove repos that have no visible packages when package-level filters are active.
+// Skip when: repos-only mode (packages hidden by design), or specific repos selected
+// (user explicitly chose those repos), or no pkg filters active.
+function pruneReposByPkgFilter(result) {
+  // Skip in focus mode — focus BFS already scopes what's relevant
+  if (!pkgFiltersActive() || state.repos.size > 0 || focusedNodes !== null) return;
+  const reposWithPkgs = new Set();
+  result.forEach(key => {
+    const a = graph.getNodeAttributes(key);
+    if (a._type === 'package') (a._repos || []).forEach(r => reposWithPkgs.add(`repo:${r}`));
+  });
+  result.forEach(key => {
+    const a = graph.getNodeAttributes(key);
+    if (a._type === 'repository' && !reposWithPkgs.has(key)) result.delete(key);
+  });
+}
+
+function passesBaseFilters(key, a) {
+  return VizUtils.passesBaseFilters(key, a, state, secAudit);
+}
+
+function nodeVisible(key, a) {
+  if (state.repos.size>0 && !state.transitive) {
+    if(a._type==='repository') return state.repos.has(a._name);
+    if(a._type==='package')    return (a._repos||[]).some(r=>state.repos.has(r));
+  }
+  return passesBaseFilters(key, a);
+}
+
+function computeVisibleSet() {
+  if (focusedNodes!==null) {
+    // Apply base filters within focus set (CVE-only, outdated, severity, search, ecosystem, etc.)
+    const result=new Set();
+    // If focused node is a package, always include its containing repos
+    const fa = graph.getNodeAttributes(state.focusedKey);
+    if (fa._type === 'package') {
+      (fa._repos || []).forEach(r => { const rk=`repo:${r}`; if(graph.hasNode(rk)) result.add(rk); });
+    }
+    focusedNodes.forEach(key=>{
+      if(!graph.hasNode(key)) return;
+      const a=graph.getNodeAttributes(key);
+      // Always keep the focused node itself; apply filters to the rest
+      if(key===state.focusedKey){ result.add(key); return; }
+      if(passesBaseFilters(key,a)) result.add(key);
+    });
+    return result;
+  }
+  if (state.repos.size>0 && state.transitive) {
+    const seeds=[...state.repos].map(r=>`repo:${r}`);
+    const reachable=bfsFromNodes(seeds, state.transitiveDepth+1);
+    const result=new Set();
+    reachable.forEach(key=>{ if(!graph.hasNode(key)) return; const a=graph.getNodeAttributes(key); if(passesBaseFilters(key,a)) result.add(key); });
+    pruneReposByPkgFilter(result);
+    return result;
+  }
+  const MAX_D = +document.getElementById('sl-depth').max;
+  if (state.focusDepth < MAX_D) {
+    // Global depth limit: BFS from all repos, then apply filters
+    const allRepos = [];
+    graph.forEachNode((key, a) => { if(a._type==='repository') allRepos.push(key); });
+    const reachable = bfsFromNodes(allRepos, state.focusDepth);
+    const result = new Set();
+    reachable.forEach(key => {
+      if(!graph.hasNode(key)) return;
+      const a=graph.getNodeAttributes(key);
+      if(nodeVisible(key,a)) result.add(key);
+    });
+    pruneReposByPkgFilter(result);
+    return result;
+  }
+  const result=new Set();
+  graph.forEachNode((key,a)=>{ if(nodeVisible(key,a)) result.add(key); });
+  pruneReposByPkgFilter(result);
+  return result;
+}
+
+let visibleSet=new Set();
+function applyFilters() {
+  visibleSet=computeVisibleSet();
+  graph.forEachNode(key=>graph.setNodeAttribute(key,'hidden',!visibleSet.has(key)));
+  graph.forEachEdge((key,a,src,tgt)=>{
+    const isContain = a._type==='contains' || a._type==='uses_action' || a._type==='uses_image';
+    const ok = visibleSet.has(src) && visibleSet.has(tgt) &&
+               (isContain || (a._type==='depends_on' && state.showPkgEdges));
+    graph.setEdgeAttribute(key,'hidden',!ok);
+  });
+  renderer.refresh(); updateStats(); updateChips(); updateSearchCount(); renderPriorities();
+}
+
+// ── Stats ──────────────────────────────────────────────────────────────────
+function getAuditArrayForRepo(repoNames) {
+  const names = Array.isArray(repoNames) ? repoNames : [repoNames];
+  const seen = new Set(), audits = [];
+  graph.forEachNode((key, attrs) => {
+    if (attrs._type === 'package' && attrs._in_org && secAudit[key] && !seen.has(key)
+        && names.some(r => (attrs._repos || []).includes(r))) {
+      seen.add(key); audits.push(secAudit[key]);
+    }
+  });
+  return audits;
+}
+
+// Return audits for the full transitive dep-chain of a node.
+// Repo: all packages reachable via contains + depends_on edges.
+// Package: self + all downstream deps (follows depends_on only).
+function getAuditArrayForDepChain(nodeKey) {
+  const a = graph.getNodeAttributes(nodeKey);
+  const pkgKeys = new Set();
+  if (a._type === 'repository') {
+    // BFS via contains then depends_on only — exclude uses_action/uses_image
+    const visited = new Set();
+    const directPkgs = [];
+    graph.forEachOutEdge(nodeKey, (edge, attrs, src, tgt) => {
+      if (attrs._type === 'contains' && !visited.has(tgt)) {
+        visited.add(tgt); directPkgs.push(tgt); pkgKeys.add(tgt);
+      }
+    });
+    let frontier = directPkgs;
+    while (frontier.length) {
+      const next = [];
+      frontier.forEach(k => depNeighbors(k).forEach(n => {
+        if (!visited.has(n)) { visited.add(n); next.push(n); pkgKeys.add(n); }
+      }));
+      frontier = next;
+    }
+  } else {
+    const visited = new Set([nodeKey]);
+    let frontier = [nodeKey];
+    while (frontier.length) {
+      const next = [];
+      frontier.forEach(k => depNeighbors(k).forEach(n => {
+        if (!visited.has(n)) { visited.add(n); next.push(n); }
+      }));
+      frontier = next;
+    }
+    visited.forEach(k => pkgKeys.add(k));
+  }
+  const audits = [];
+  pkgKeys.forEach(k => { if (secAudit[k]) audits.push(secAudit[k]); });
+  return audits;
+}
+
+function updateDynamicCounts() {
+  // Ecosystem counts — visible packages per ecosystem
+  document.querySelectorAll('.eco-cb[data-eco]').forEach(cb => {
+    const eco = cb.dataset.eco;
+    let count = 0;
+    visibleSet.forEach(k => { if (graph.getNodeAttribute(k,'_ecosystem') === eco) count++; });
+    const countEl = cb.closest('.eco-item')?.querySelector('.eco-count');
+    if (countEl) countEl.textContent = count || '';
+  });
+  // Visible dep edges + external nodes
+  let visDepEdges = 0;
+  graph.forEachEdge((key, a) => {
+    if (!graph.getEdgeAttribute(key,'hidden') && a._type === 'depends_on') visDepEdges++;
+  });
+  document.getElementById('dep-edge-count').textContent = visDepEdges.toLocaleString();
+  document.getElementById('dep-edge-badge').textContent = `(${visDepEdges.toLocaleString()})`;
+  let visExternal = 0;
+  visibleSet.forEach(k => { const a=graph.getNodeAttributes(k); if (a._type==='package' && !a._in_org) visExternal++; });
+  document.getElementById('ext-node-count').textContent = visExternal || '0';
+  // Visible conflict packages
+  let visConflicts = 0;
+  visibleSet.forEach(k => { if (graph.getNodeAttribute(k,'_has_conflict')) visConflicts++; });
+  document.getElementById('conflict-pkg-count').textContent = visConflicts || '';
+}
+
+function updateStats() {
+  const visRepos=[...visibleSet].filter(k=>graph.getNodeAttribute(k,'_type')==='repository').length;
+  const visPkgs =[...visibleSet].filter(k=>graph.getNodeAttribute(k,'_type')==='package').length;
+  let visContains=0, visDepends=0;
+  graph.forEachEdge((key,a)=>{ if(!graph.getEdgeAttribute(key,'hidden')){ if(a._type==='contains') visContains++; else visDepends++; }});
+  document.getElementById('stats-body').innerHTML =
+    statRow('Repos',      visRepos,    repoNodes.length, '#58a6ff') +
+    statRow('Packages',   visPkgs,     pkgNodes.length,  '#58a6ff') +
+    statRow('→ contains', visContains, containsCount,    '#58a6ff') +
+    (state.showPkgEdges ? statRow('→ dep links', visDepends, dependsCount, '#1d7a5f') : '');
+  // Security stats: org packages (direct) + all visible packages incl. external (supply chain)
+  const visOrgAudits = [], visAllAudits = [];
+  visibleSet.forEach(k => {
+    const a = graph.getNodeAttributes(k);
+    if (a._type !== 'package' || !secAudit[k]) return;
+    visAllAudits.push(secAudit[k]);
+    if (a._in_org) visOrgAudits.push(secAudit[k]);
+  });
+  renderSecStatGrid(visOrgAudits, visAllAudits, 'org');
+  updateDynamicCounts();
+}
+function statRow(label,vis,total,color) {
+  const p=total?Math.round(vis/total*100):0;
+  return `<span class="stat-k">${label}</span><span class="stat-v">${vis.toLocaleString()} / ${total.toLocaleString()}</span>
+    <div class="stat-bar" style="grid-column:1/-1;margin-bottom:6px"><div class="stat-fill" style="width:${p}%;background:${color}"></div></div>`;
+}
+
+// ── Chips ──────────────────────────────────────────────────────────────────
+function updateChips() {
+  const wrap=document.getElementById('chips-wrap'); wrap.innerHTML='';
+  const chips=[];
+  if(state.minRepos>1) chips.push({label:`Min ${state.minRepos} repos`,clear:()=>{state.minRepos=1;document.getElementById('sl-minrepos').value=1;updateSliderHint();applyFilters();}});
+  if(state.license) chips.push({label:catLabels[state.license]||state.license,clear:()=>{state.license='';licSel.value='';licHint.textContent='';applyFilters();}});
+  if(state.conflictsOnly) chips.push({label:'conflicts only',clear:()=>{state.conflictsOnly=false;document.getElementById('cb-conflicts-only').checked=false;applyFilters();}});
+  if(state.cveOnly) chips.push({label:'CVE only',clear:()=>{state.cveOnly=false;document.getElementById('cb-cve-only').checked=false;applyFilters();}});
+  if(state.outdatedOnly)  chips.push({label:'outdated only',  clear:()=>{state.outdatedOnly=false; document.getElementById('cb-outdated-only').checked=false; applyFilters();}});
+  if(state.abandonedOnly) chips.push({label:'abandoned only', clear:()=>{state.abandonedOnly=false;document.getElementById('cb-abandoned-only').checked=false;applyFilters();}});
+  if(state.confusionOnly)  chips.push({label:'confusion risk', clear:()=>{state.confusionOnly=false; document.getElementById('cb-confusion-only').checked=false; applyFilters();}});
+  if(state.minSeverity) chips.push({label:`≥ ${state.minSeverity}`,clear:()=>{state.minSeverity='';document.getElementById('filter-sev').value='';applyFilters();}});
+  if(state.showPkgEdges) chips.push({label:'dep links on',clear:()=>{state.showPkgEdges=false;document.getElementById('cb-dep-edges').checked=false;applyFilters();}});
+  if(state.transitive) chips.push({label:`transitive ×${state.transitiveDepth}`,clear:()=>{state.transitive=false;document.getElementById('cb-transitive').checked=false;document.getElementById('trans-depth-wrap').style.display='none';applyFilters();}});
+  if(state.focusedKey) chips.push({label:`focus: ${state.focusedKey.replace('repo:','').slice(0,25)}`,clear:()=>clearFocus(true)});
+  if(state.search) chips.push({label:`"${state.search}"`,clear:()=>{state.search='';document.getElementById('search').value='';applyFilters();}});
+  const allEcos=new Set(Object.keys(ecoCounts));
+  allEcos.forEach(eco=>{ if(!state.ecosystems.has(eco)) chips.push({label:`−${eco}`,clear:()=>{state.ecosystems.add(eco);document.querySelector(`.eco-cb[data-eco="${eco}"]`).checked=true;applyFilters();}});});
+  if(state.repos.size>0){
+    if(state.repos.size<=3) [...state.repos].forEach(r=>chips.push({label:`repo:${r}`,clear:()=>{state.repos.delete(r);const cb=document.querySelector(`.repo-cb[data-repo="${r}"]`);if(cb)cb.checked=false;updateRepoBadge();updateTransitiveVis();applyFilters();}}));
+    else chips.push({label:`${state.repos.size} repos selected`,clear:()=>{state.repos.clear();document.querySelectorAll('.repo-cb').forEach(cb=>cb.checked=false);updateRepoBadge();updateTransitiveVis();applyFilters();}});
+  }
+  chips.forEach(({label,clear})=>{
+    const chip=document.createElement('span'); chip.className='chip';
+    chip.innerHTML=`<span>${escHtml(label)}</span><span class="chip-x">×</span>`;
+    chip.querySelector('.chip-x').onclick=clear; wrap.appendChild(chip);
+  });
+  if(chips.length>1){const cl=document.createElement('span');cl.id='chip-clear';cl.textContent='Clear all';cl.onclick=clearAllFilters;wrap.appendChild(cl);}
+}
+function clearAllFilters() {
+  state.minRepos=1;document.getElementById('sl-minrepos').value=1;updateSliderHint();
+  state.license='';licSel.value='';licHint.textContent=''; state.conflictsOnly=false;document.getElementById('cb-conflicts-only').checked=false;
+  state.cveOnly=false;document.getElementById('cb-cve-only').checked=false;
+  state.outdatedOnly=false;document.getElementById('cb-outdated-only').checked=false;
+  state.abandonedOnly=false;document.getElementById('cb-abandoned-only').checked=false;
+  state.confusionOnly=false;document.getElementById('cb-confusion-only').checked=false;
+  state.minSeverity='';document.getElementById('filter-sev').value='';
+  state.showPkgEdges=false;document.getElementById('cb-dep-edges').checked=false;
+  state.showExternal=false;document.getElementById('cb-show-external').checked=false;
+  state.transitive=false;document.getElementById('cb-transitive').checked=false;
+  document.getElementById('trans-depth-wrap').style.display='none';
+  state.search='';document.getElementById('search').value='';
+  state.ecosystems=new Set(Object.keys(ecoCounts));document.querySelectorAll('.eco-cb').forEach(cb=>cb.checked=true);
+  state.repos.clear();document.querySelectorAll('.repo-cb').forEach(cb=>cb.checked=false);
+  updateRepoBadge();updateTransitiveVis();clearFocus(false);applyFilters();
+}
+
+// ── Focus layout ────────────────────────────────────────────────────────────
+// Same dynamic algorithm as recompute_layout.py:
+//   TARGET_ARC = SUBRING_STEP: arc-length and radial step use same unit
+//   MIN_STEP = TARGET_ARC × LAYER_FACTOR: clear depth-layer separation
+//   MAX_RING_NODES: dense layers split into sub-rings
+//   Camera ratio computed to guarantee arc-spacing ≥ NODE_DIAM_PX at initial zoom
+function computeFocusLayout(nodeKey) {
+  const TARGET_ARC     = 4000;
+  const MAX_RING_NODES = 200;
+  const LAYER_FACTOR   = 6;
+  const JITTER         = 0.06;
+  const NODE_DIAM_PX   = 10;
+  const VIEWPORT_PX    = 1000;
+  const SUBRING_STEP   = TARGET_ARC;
+  const MIN_STEP       = TARGET_ARC * LAYER_FACTOR;
+
+  // ── BFS spanning tree from nodeKey (constrained to focusedNodes) ─────────
+  const bfsDepth    = new Map();
+  const bfsChildren = new Map();
+  bfsDepth.set(nodeKey, 0);
+  bfsChildren.set(nodeKey, []);
+
+  const queue = [nodeKey];
+  while (queue.length > 0) {
+    const key   = queue.shift();
+    const d     = bfsDepth.get(key);
+    const attrs = graph.getNodeAttributes(key);
+    const nbrs  = attrs._type === 'repository'
+      ? graph.outNeighbors(key)
+      : depNeighbors(key);
+    for (const child of nbrs) {
+      if (!bfsDepth.has(child) && focusedNodes.has(child)) {
+        bfsDepth.set(child, d + 1);
+        bfsChildren.set(child, []);
+        bfsChildren.get(key).push(child);
+        queue.push(child);
+      }
+    }
+  }
+
+  // ── Subtree sizes ─────────────────────────────────────────────────────────
+  const subtree = new Map();
+  function calcSubtree(k) {
+    const ch = bfsChildren.get(k) || [];
+    let s = 1;
+    for (const c of ch) s += calcSubtree(c);
+    subtree.set(k, s);
+    return s;
+  }
+  calcSubtree(nodeKey);
+
+  // ── Angular sectors — root gets full 2π ───────────────────────────────────
+  const secStart = new Map();
+  const secEnd   = new Map();
+  secStart.set(nodeKey, -Math.PI);
+  secEnd.set(nodeKey,    Math.PI);
+  function assignSectors(k) {
+    const ch = bfsChildren.get(k) || [];
+    if (!ch.length) return;
+    const arc   = secEnd.get(k) - secStart.get(k);
+    const total = ch.reduce((s, c) => s + (subtree.get(c) || 1), 0);
+    let cursor  = secStart.get(k);
+    for (const c of ch) {
+      const frac = (subtree.get(c) || 1) / Math.max(total, 1);
+      secStart.set(c, cursor);
+      secEnd.set(c,   cursor + arc * frac);
+      cursor = secEnd.get(c);
+      assignSectors(c);
+    }
+  }
+  assignSectors(nodeKey);
+
+  // ── Sub-ring assignments (same as Python) ─────────────────────────────────
+  const layerCounts  = new Map();
+  bfsDepth.forEach(d => layerCounts.set(d, (layerCounts.get(d) || 0) + 1));
+  const allDepths    = [...layerCounts.keys()].sort((a, b) => a - b);
+
+  const subrings     = new Map();  // key → sub-ring index within depth layer
+  const layerNSr     = new Map();  // depth → number of sub-rings
+
+  for (const d of allDepths) {
+    if (d === 0) { layerNSr.set(0, 1); continue; }
+    const keysAtD = [];
+    bfsDepth.forEach((dep, k) => { if (dep === d) keysAtD.push(k); });
+    const nSr = Math.max(1, Math.ceil(keysAtD.length / MAX_RING_NODES));
+    layerNSr.set(d, nSr);
+    // Heavier subtrees → inner sub-rings
+    keysAtD.sort((a, b) => (subtree.get(b) || 1) - (subtree.get(a) || 1));
+    keysAtD.forEach((k, i) => subrings.set(k, Math.floor(i / MAX_RING_NODES)));
+  }
+
+  // ── Radius per layer (focused node at r=0; layers radiate outward) ────────
+  const layerRBase  = new Map();
+  layerRBase.set(0, 0);
+  let prevOuter = 0;
+
+  for (const d of allDepths) {
+    if (d === 0) continue;
+    const nRing  = Math.min(layerCounts.get(d), MAX_RING_NODES);
+    const rNeeded = nRing * TARGET_ARC / (2 * Math.PI);
+    const baseR   = Math.max(prevOuter + MIN_STEP, rNeeded);
+    layerRBase.set(d, baseR);
+    const nSr    = layerNSr.get(d) || 1;
+    prevOuter    = baseR + (nSr - 1) * SUBRING_STEP;
+  }
+
+  const maxR = prevOuter || 1;
+
+  // ── Place nodes ───────────────────────────────────────────────────────────
+  bfsDepth.forEach((d, key) => {
+    if (d === 0) {
+      graph.setNodeAttribute(key, 'x', 0);
+      graph.setNodeAttribute(key, 'y', 0);
+      return;
+    }
+    const sr  = subrings.get(key) || 0;
+    const rad = (layerRBase.get(d) || 0) + sr * SUBRING_STEP;
+    const s   = secStart.get(key) || 0;
+    const e   = secEnd.get(key)   || 0;
+    const arc = e - s;
+    const mid = (s + e) / 2 + (Math.random() - 0.5) * 2 * arc * JITTER;
+    graph.setNodeAttribute(key, 'x', rad * Math.cos(mid));
+    graph.setNodeAttribute(key, 'y', rad * Math.sin(mid));
+  });
+
+  // ── Animate camera to dynamic non-overlap ratio ───────────────────────────
+  // Same formula as Python: ratio = TARGET_ARC × VIEWPORT / (NODE_DIAM × 2 × MAX_R)
+  const focusRatio = Math.min(0.8, Math.max(0.05,
+    TARGET_ARC * VIEWPORT_PX / (NODE_DIAM_PX * 2 * maxR)));
+  renderer.getCamera().animate({ x: 0.5, y: 0.5, ratio: focusRatio, angle: 0 },
+                                { duration: 350 });
+}
+
+function restoreOrigPositions() {
+  graph.forEachNode((key, attrs) => {
+    graph.setNodeAttribute(key, 'x', attrs._orig_x);
+    graph.setNodeAttribute(key, 'y', attrs._orig_y);
+  });
+}
+
+// ── Focus ──────────────────────────────────────────────────────────────────
+function setFocus(nodeKey, depth) {
+  state.focusedKey=nodeKey; state.focusDepth=depth||state.focusDepth;
+  document.getElementById('sl-depth').value=state.focusDepth; updateDepthHint();
+  focusedNodes=bfsFromNodes([nodeKey], state.focusDepth);
+  computeFocusLayout(nodeKey);
+  document.getElementById('focus-banner').style.display='block';
+  applyFilters();
+}
+function clearFocus(doApply) {
+  state.focusedKey=null; focusedNodes=null;
+  document.getElementById('focus-banner').style.display='none';
+  updateDepthHint();
+  restoreOrigPositions();
+  renderer.getCamera().animate({x:0.5,y:0.5,ratio:INITIAL_RATIO,angle:0},{duration:350});
+  if(doApply!==false) applyFilters();
+}
+document.getElementById('focus-banner').onclick=()=>clearFocus(true);
+function updateDepthHint() {
+  const d=state.focusDepth;
+  const MAX_D = +document.getElementById('sl-depth').max;
+  const label = d===1 ? 'Direct only' : `${d-1} transitive level${d>2?'s':''}`;
+  const ctx   = state.focusedKey ? 'Focus' : d===MAX_D ? 'All depths' : 'Global';
+  document.getElementById('depth-hint').textContent=`${ctx}: ${label}`;
+  document.getElementById('sl-depth-val').textContent=d===MAX_D&&!state.focusedKey?'∞':d;
+}
+document.getElementById('sl-depth').addEventListener('input', e=>{
+  state.focusDepth=+e.target.value;
+  if(state.focusedKey) {
+    focusedNodes=bfsFromNodes([state.focusedKey],state.focusDepth);
+    computeFocusLayout(state.focusedKey);
+  }
+  updateDepthHint(); applyFilters();
+});
+
+// ── Sliders ────────────────────────────────────────────────────────────────
+function updateSliderHint() {
+  const v=state.minRepos, count=pkgNodes.filter(n=>n.attributes.repo_count>=v).length;
+  document.getElementById('sl-minrepos-val').textContent=v;
+  document.getElementById('sl-hint').textContent=v===1?`All ${pkgNodes.length.toLocaleString()} packages`:`${count.toLocaleString()} packages in ${v}+ repos`;
+}
+document.getElementById('sl-minrepos').addEventListener('input',e=>{state.minRepos=+e.target.value;updateSliderHint();applyFilters();});
+updateSliderHint();
+document.getElementById('sl-trans-depth').addEventListener('input',e=>{
+  state.transitiveDepth=+e.target.value;
+  document.getElementById('sl-trans-depth-val').textContent=state.transitiveDepth;
+  document.getElementById('sl-trans-hint').textContent=`Direct + ${state.transitiveDepth} levels transitive`;
+  applyFilters();
+});
+
+
+// ── Event bindings ─────────────────────────────────────────────────────────
+ecoGrid.addEventListener('change',e=>{if(!e.target.dataset.eco)return; if(e.target.checked)state.ecosystems.add(e.target.dataset.eco);else state.ecosystems.delete(e.target.dataset.eco);applyFilters();});
+document.getElementById('cb-dep-edges').addEventListener('change',e=>{state.showPkgEdges=e.target.checked;applyFilters();});
+document.getElementById('cb-show-external').addEventListener('change',e=>{state.showExternal=e.target.checked;applyFilters();});
+document.getElementById('cb-conflicts-only').addEventListener('change',e=>{state.conflictsOnly=e.target.checked;applyFilters();});
+document.getElementById('cb-cve-only').addEventListener('change',e=>{state.cveOnly=e.target.checked;applyFilters();});
+document.getElementById('cb-outdated-only').addEventListener('change',e=>{state.outdatedOnly=e.target.checked;applyFilters();});
+document.getElementById('cb-abandoned-only').addEventListener('change',e=>{state.abandonedOnly=e.target.checked;applyFilters();});
+document.getElementById('cb-confusion-only').addEventListener('change',e=>{state.confusionOnly=e.target.checked;applyFilters();});
+document.getElementById('filter-sev').addEventListener('change',e=>{state.minSeverity=e.target.value;applyFilters();});
+// licSel listener registered in license setup block above
+document.getElementById('cb-transitive').addEventListener('change',e=>{
+  state.transitive=e.target.checked;document.getElementById('trans-depth-wrap').style.display=state.transitive?'block':'none';applyFilters();
+});
+let searchTimer;
+document.getElementById('search').addEventListener('input',e=>{
+  clearTimeout(searchTimer);searchTimer=setTimeout(()=>{state.search=e.target.value.toLowerCase().trim();applyFilters();},200);
+});
+function updateSearchCount(){const el=document.getElementById('search-count');if(!state.search){el.textContent='';return;}el.textContent=`${visibleSet.size.toLocaleString()} matches`;}
+document.querySelectorAll('.sec-header[data-sec]').forEach(h=>{
+  h.addEventListener('click',()=>{const body=document.getElementById(`body-${h.dataset.sec}`);const arrow=h.querySelector('.sec-arrow');if(!body)return;const hidden=body.classList.toggle('hidden');if(arrow)arrow.classList.toggle('open',!hidden);});
+});
+
+// ── CVE render helpers ─────────────────────────────────────────────────────
+function renderCVEItem(v) {
+  const scoreStr = v.cvss_score != null ? ` ${v.cvss_score.toFixed(1)}` : '';
+  const blastKey = v.alias || v.id;
+  const blast = cveBlastRadius[blastKey];
+  const blastHtml = blast
+    ? `<div style="font-size:10px;color:#8b949e;margin-top:2px" title="${blast.affected_repos.slice(0,10).join(', ')}${blast.affected_repo_count>10?' +more':''}">
+        💥 ${blast.affected_repo_count} repo${blast.affected_repo_count!==1?'s':''} · ${blast.affected_package_count} pkg${blast.affected_package_count!==1?'s':''} affected
+       </div>`
+    : '';
+  return `<div class="cve-item">
+    <div class="cve-header">
+      <a class="cve-id" href="${v.url||`https://osv.dev/vulnerability/${v.id}`}" target="_blank">${v.alias||v.id}</a>
+      <span class="sev sev-${v.severity}">${v.severity}${scoreStr}</span>
+    </div>
+    ${v.summary?`<div class="cve-summary">${escHtml(v.summary)}</div>`:''}
+    ${v.fixed?`<div class="cve-fix">✓ Fixed in ${escHtml(v.fixed)}</div>`:'<div class="cve-no-fix">No fix available</div>'}
+    ${blastHtml}
+  </div>`;
+}
+
+function renderSecuritySection(purl, version, ecosystem) {
+  const aud = secAudit[purl];
+  if (!aud) {
+    // Fall back to async fetch
+    return `<div class="async-section" id="async-ver">
+      <div class="async-title">Version <span class="async-spinner" id="ver-spin"></span></div>
+      <div id="ver-content"></div>
+    </div>
+    <div class="async-section" id="async-cve">
+      <div class="async-title">CVE alerts <span class="async-spinner" id="cve-spin"></span></div>
+      <div id="cve-content"></div>
+    </div>`;
+  }
+
+  // Instant from pre-computed audit
+  const abandonedBanner = aud.abandoned
+    ? `<div style="margin-bottom:4px;padding:3px 7px;background:#2a1a2a;border:1px solid #88228840;border-radius:4px;font-size:10px;color:#c084fc">
+        ⚠ Abandoned — last release: ${escHtml(aud.last_release||'unknown')}
+       </div>` : '';
+  const confusionBanner = aud.confusion_risk
+    ? `<div style="margin-bottom:4px;padding:3px 7px;background:#2a1a0a;border:1px solid #f97316;border-radius:4px;font-size:10px;color:#f97316">
+        🎭 Dependency confusion risk — not on public registry
+       </div>` : '';
+
+  // Detect version-ahead anomaly: audit marks as outdated but installed > registry "latest"
+  const installedAhead = aud.is_latest===false && aud.latest_version && version && verAhead(version, aud.latest_version);
+  const gap = (!installedAhead && aud.is_latest===false) ? majorGap(version, aud.latest_version) : 0;
+
+  let verHtml = '';
+  if (aud.latest_version) {
+    const badge = aud.is_latest===true || installedAhead
+      ? '<span class="ver-badge ver-ok">Up to date</span>'
+      : gap > 0
+        ? `<span class="ver-badge ver-break">⛔ BREAKING (+${gap} major)</span>`
+        : aud.is_latest===false ? '<span class="ver-badge ver-old">Outdated</span>' : '';
+    const latestLine = aud.is_latest===false && !installedAhead
+      ? `<div class="ver-row" style="color:#8b949e">Latest: <b style="color:#e6edf3">${escHtml(aud.latest_version)}</b>${gap>0?` <span style="font-size:10px;color:#f97316">(${gap} major version${gap!==1?'s':''} behind — may require code changes)</span>`:''}</div>` : '';
+    verHtml = `<div class="async-section">
+      <div class="async-title">Version</div>
+      ${abandonedBanner}${confusionBanner}
+      <div class="ver-row">Current: <b>${escHtml(version||'?')}</b> ${badge}</div>
+      ${latestLine}
+      ${aud.last_release?`<div class="ver-row" style="color:#8b949e">Last release: ${escHtml(aud.last_release)}</div>`:''}
+    </div>`;
+  } else {
+    verHtml = `<div class="async-section"><div class="async-title">Version</div>
+      ${abandonedBanner}${confusionBanner}
+      <span class="ver-na">No registry data for ${ecosystem}</span></div>`;
+  }
+
+  const cvssLabel = aud.max_cvss != null ? ` · max CVSS ${aud.max_cvss.toFixed(1)}` : '';
+  const cveHtml = `<div class="async-section">
+    <div class="async-title">CVE alerts (${aud.cve_count}${cvssLabel})</div>
+    ${aud.cve_count===0 ? '<span class="no-cve">✓ No known vulnerabilities</span>' :
+      `<div class="cve-list">${(aud.vulns||[]).slice(0,6).map(renderCVEItem).join('')}</div>`}
+  </div>`;
+
+  return verHtml + cveHtml;
+}
+
+// ── PURL parse + external API (fallback for packages without audit data) ───
+function parsePurl(purl) {
+  if(!purl||!purl.startsWith('pkg:')) return null;
+  const [main]=purl.slice(4).split('?'); const [hashless]=main.split('#');
+  const si=hashless.indexOf('/'); if(si===-1) return null;
+  const eco=hashless.slice(0,si).toLowerCase(), rest=hashless.slice(si+1);
+  const ai=rest.lastIndexOf('@');
+  return {eco, namePath:decodeURIComponent(ai!==-1?rest.slice(0,ai):rest)};
+}
+function purlToOsv(purl){
+  const p=parsePurl(purl); if(!p) return null;
+  const {eco,namePath}=p; const parts=namePath.split('/');
+  const m={pypi:['PyPI',namePath],npm:['npm',namePath],golang:['Go',namePath],gem:['RubyGems',parts[parts.length-1]],cargo:['crates.io',namePath],maven:['Maven',parts.length>=2?`${parts[0]}:${parts[1]}`:namePath],nuget:['NuGet',namePath],composer:['Packagist',namePath],cocoapods:['CocoaPods',parts[parts.length-1]],hackage:['Hackage',namePath],hex:['Hex',parts[parts.length-1]],pub:['Pub',namePath],cran:['CRAN',namePath],github:['GitHub Actions',parts.slice(0,2).join('/')],};
+  if(eco==='swift'&&parts.length>=3) return ['SwiftURL',`https://${parts[0]}/${parts[1]}/${parts[2].replace(/\.git$/,'')}`];
+  const e=m[eco]; return e?{ecosystem:e[0],name:e[1]}:null;
+}
+function timeout(ms){return new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),ms));}
+async function fetchCVEsAsync(purl,version){
+  const pkg=purlToOsv(purl); if(!pkg||!version) return null;
+  try{const r=await Promise.race([fetch('https://api.osv.dev/v1/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({package:{name:pkg.name,ecosystem:pkg.ecosystem},version})}),timeout(8000)]);return r.ok?(await r.json()).vulns||[]:null;}catch{return null;}
+}
+async function fetchLatestAsync(purl){
+  const p=parsePurl(purl); if(!p) return null;
+  const {eco,namePath}=p; const parts=namePath.split('/');
+  try{
+    if(eco==='pypi'){const r=await fetch(`https://pypi.org/pypi/${encodeURIComponent(namePath)}/json`);return r.ok?(await r.json()).info.version:null;}
+    if(eco==='npm'){const r=await fetch(`https://registry.npmjs.org/${encodeURIComponent(namePath)}/latest`);return r.ok?(await r.json()).version:null;}
+    if(eco==='gem'){const r=await fetch(`https://rubygems.org/api/v1/versions/${encodeURIComponent(parts[parts.length-1])}/latest.json`);return r.ok?(await r.json()).version:null;}
+  }catch{}
+  return null;
+}
+
+// ── Node click ─────────────────────────────────────────────────────────────
+const detail=document.getElementById('detail-panel');
+
+// Expand/collapse "+N more" in dep chain sections (event delegation — survives innerHTML rewrites)
+detail.addEventListener('click', e => {
+  const btn = e.target.closest('.chain-more');
+  if (!btn) return;
+  const items = btn.nextElementSibling;
+  if (!items || !items.classList.contains('chain-more-items')) return;
+  const showing = items.style.display !== 'none';
+  items.style.display = showing ? 'none' : 'block';
+  btn.textContent = showing ? `+${btn.dataset.total} more with issues` : '▲ collapse';
+  // Reattach dep-tag click handlers for newly revealed items
+  if (!showing) {
+    items.querySelectorAll('.tag.dep-tag[data-key]').forEach(t => {
+      t.onclick = () => setFocus(t.dataset.key, state.focusDepth || 2);
+    });
+  }
+});
+renderer.on('clickNode',({node})=>{
+  const a=graph.getNodeAttributes(node);
+  if(a._type==='repository'){
+    const risk = a._risk || repoRiskScores[a._name];
+    const riskHtml = risk ? (() => {
+      const scoreColor = riskScoreColor(risk.score);
+      const label = risk.score >= 75 ? 'CRITICAL' : risk.score >= 50 ? 'HIGH' : risk.score >= 25 ? 'MEDIUM' : 'LOW';
+      return `<div style="margin:8px 0;padding:8px 10px;background:#161b22;border:1px solid #30363d;border-radius:6px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:11px;color:#8b949e;font-weight:600">REPO RISK SCORE</span>
+          <span style="font-size:18px;font-weight:700;color:${scoreColor}">${risk.score}<span style="font-size:10px;color:#8b949e">/100</span>
+            <span style="font-size:10px;margin-left:4px;padding:1px 5px;border-radius:3px;background:${scoreColor}22;color:${scoreColor}">${label}</span>
+          </span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;font-size:10px">
+          ${risk.critical?`<span style="color:#ff7b72">● ${risk.critical} CRITICAL</span>`:''}
+          ${risk.high?`<span style="color:#f0a030">● ${risk.high} HIGH</span>`:''}
+          ${risk.medium?`<span style="color:#e3b341">● ${risk.medium} MEDIUM</span>`:''}
+          ${risk.low?`<span style="color:#8b949e">● ${risk.low} LOW</span>`:''}
+          <span style="color:#8b949e">⚡ ${risk.outdated} outdated (${Math.round((risk.outdated_ratio||0)*100)}%)</span>
+          ${risk.abandoned?`<span style="color:#c084fc">💤 ${risk.abandoned} abandoned</span>`:''}
+          ${risk.copyleft?`<span style="color:#8b949e">⚖ ${risk.copyleft} copyleft</span>`:''}
+        </div>
+      </div>`;
+    })() : '';
+    detail.innerHTML=`<h2>📁 ${escHtml(a._name)}</h2>
+      <div class="dl">
+        <span class="dk">Direct packages</span><span class="dv">${graph.outDegree(node).toLocaleString()}</span>
+        <span class="dk">Graph degree</span><span class="dv">${graph.degree(node)}</span>
+      </div>
+      ${riskHtml}
+      <button class="focus-btn" id="dfb">📌 Focus on this repo</button>`;
+
+    // Completeness badge
+    const rr = repoRiskScores[a._name];
+    if (rr) {
+      const cs = rr.completeness_score;
+      if (cs !== null && cs !== undefined) {
+        const cls = cs >= 80 ? 'comp-ok' : cs >= 50 ? 'comp-warn' : 'comp-bad';
+        const extra = `<div style="margin-top:6px;font-size:11px;display:flex;align-items:center;gap:6px">
+          <span style="color:#8b949e">SBOM completeness</span>
+          <span class="comp-badge ${cls}">${cs}%</span>
+          <span style="color:#6e7681;font-size:10px">(${rr.lock_found||0}/${rr.lock_count||0} lock file pkgs matched)</span>
+        </div>`;
+        detail.innerHTML = detail.innerHTML.replace('</div>\n      <button', extra + '</div>\n      <button');
+      }
+    }
+
+    document.getElementById('dfb').onclick=()=>setFocus(node,state.focusDepth||1);
+    renderSecStatGrid(getDirectAuditArray(node), getAuditArrayForDepChain(node), 'direct');
+  } else {
+    const repos=a._repos||[];
+    const directDepsCount=graph.outNeighbors(node).length;
+    const reqByCount=graph.inNeighbors(node).filter(k=>graph.getNodeAttribute(k,'_type')==='package').length;
+
+    let conflictHtml='';
+    if(a._has_conflict&&a._conflict_versions?.length>1){
+      conflictHtml=`<div class="conflict-banner">⚡ ${a._conflict_versions.length} versions in org</div>
+        <table class="conflict-table">${a._conflict_versions.map(cv=>`<tr class="${cv.version===a._version?'cur-ver':''}"><td>${cv.version===a._version?'▶ ':''}${escHtml(cv.version)}</td><td>${cv.repos.slice(0,4).map(r=>escHtml(r)).join(', ')}${cv.repos.length>4?` +${cv.repos.length-4}`:''}</td></tr>`).join('')}</table>`;
+    }
+
+    const secSectionHtml  = renderSecuritySection(node, a._version, a._ecosystem);
+    const chainHtml       = renderChainAudit(node);
+    const reverseChainHtml= renderReverseChain(node);
+
+    // Chain risk badge — shows when transitive risk exceeds own status
+    const ownAud = secAudit[node];
+    const ownStatus = ownAud
+      ? (ownAud.cve_count > 0 ? 'cve' : ownAud.abandoned ? 'abandoned' : ownAud.is_latest === false ? 'outdated' : ownAud.is_latest === true ? 'ok' : 'noData')
+      : 'noData';
+    const ts = transSecStatus[node] || 'noData';
+    const RANK_MAP = { noData: 0, ok: 1, outdated: 2, abandoned: 3, cve: 4 };
+    const chainRiskBadge = (RANK_MAP[ts] > RANK_MAP[ownStatus]) ? (() => {
+      const icons = { cve: '🔴', abandoned: '💤', outdated: '⚡' };
+      const labels = { cve: 'CVE in transitive deps', abandoned: 'Abandoned dep in chain', outdated: 'Outdated dep in chain' };
+      const colors = { cve: '#d97706', abandoned: '#5b2a7a', outdated: '#6e5200' };
+      return `<div style="margin:6px 0;padding:5px 8px;background:${colors[ts]}22;border:1px solid ${colors[ts]}66;border-radius:5px;font-size:11px;color:${colors[ts]};display:flex;align-items:center;gap:5px">
+        <span>${icons[ts]||'⚠'}</span><span style="font-weight:600">Chain risk:</span><span>${labels[ts]||ts}</span>
+      </div>`;
+    })() : '';
+
+    const licSrcLabel = {'cdx':'CDX manifest','spdx':'SPDX manifest','registry':'registry API','noassertion':''}[a._license_source] || '';
+    const licSrcHtml = licSrcLabel ? ` <span style="font-size:9px;color:#444;cursor:default" title="Source: ${licSrcLabel}">(${a._license_source})</span>` : '';
+    const directList = a._direct_in_repos || [];
+    const directHtml = directList.length
+      ? `<span class="dk">Direct in</span><span class="dv" title="${directList.join(', ')}">${directList.slice(0,3).map(r=>`<span style="font-size:9px;background:#162115;border:1px solid #3fb95030;border-radius:3px;padding:1px 4px;margin-right:2px">${escHtml(r)}</span>`).join('')}${directList.length>3?`<span style="font-size:9px;color:#8b949e">+${directList.length-3}</span>`:''}</span>`
+      : `<span class="dk">Dep type</span><span class="dv" style="color:#8b949e;font-size:10px">transitive only</span>`;
+    detail.innerHTML=`<h2>${escHtml(a.label)}</h2>
+      <div class="dl">
+        <span class="dk">Ecosystem</span><span class="dv">${escHtml(a._ecosystem)}</span>
+        <span class="dk">Version</span><span class="dv">${a._version||'—'}</span>
+        <span class="dk">License</span><span class="dv">${escHtml(a._license||'—')}${licSrcHtml}</span>
+        ${directHtml}
+        <span class="dk">In repos</span><span class="dv">${a._repo_count} repo${a._repo_count!==1?'s':''}</span>
+        ${(a._usage_score||0)>0?`<span class="dk" title="Direct dep = 1pt per repo · each transitive layer = ×0.5">Usage score</span><span class="dv">${(a._usage_score).toFixed(1)}</span>`:''}
+        <span class="dk">Direct deps</span><span class="dv">${directDepsCount||'—'}</span>
+        <span class="dk">Required by</span><span class="dv">${reqByCount} pkg${reqByCount!==1?'s':''}</span>
+        ${a._dep_completeness!=null?`<span class="dk" title="Fraction of declared deps resolved to graph nodes">Dep coverage</span><span class="dv" style="color:${a._dep_completeness>=0.8?'#3fb950':a._dep_completeness>=0.5?'#e3b341':'#f85149'}">${Math.round(a._dep_completeness*100)}%</span>`:''}
+        <span class="dk">PURL</span><span class="dv" style="font-size:10px">${escHtml(a._purl)}</span>
+      </div>
+      ${conflictHtml}
+      ${chainRiskBadge}
+      ${repos.length?`<div class="dep-section"><div class="dep-section-title">Repos (${repos.length})</div>
+        <div class="tag-list">${repos.map(r=>`<span class="tag" data-repo="${escHtml(r)}">${escHtml(r)}</span>`).join('')}</div></div>`:''}
+      <button class="focus-btn" id="dpfb" style="margin-top:8px">📌 Focus + expand deps</button>
+      ${reverseChainHtml}
+      ${secSectionHtml}
+      ${chainHtml}`;
+
+    document.getElementById('dpfb').onclick=()=>setFocus(node,Math.max(state.focusDepth,2));
+    renderSecStatGrid(getDirectAuditArray(node), getAuditArrayForDepChain(node), 'this pkg');
+    detail.querySelectorAll('.tag[data-repo]').forEach(t=>{
+      t.onclick=()=>{const r=t.dataset.repo;state.repos.add(r);const cb=document.querySelector(`.repo-cb[data-repo="${r}"]`);if(cb)cb.checked=true;updateRepoBadge();updateTransitiveVis();applyFilters();};
+    });
+    detail.querySelectorAll('.tag.dep-tag[data-key]').forEach(t=>{
+      t.onclick=()=>setFocus(t.dataset.key,state.focusDepth||2);
+    });
+    detail.querySelectorAll('.tag.rev-repo-tag[data-repo]').forEach(t=>{
+      t.onclick=()=>{const rk=`repo:${t.dataset.repo}`;setFocus(rk,state.focusDepth||1);};
+    });
+
+    // Async fallback for packages without audit data
+    if(!secAudit[node]){
+      const vs=document.getElementById('ver-spin'), vc=document.getElementById('ver-content');
+      const cs=document.getElementById('cve-spin'), cc=document.getElementById('cve-content');
+      if(vs&&vc) fetchLatestAsync(a._purl).then(latest=>{if(vs)vs.style.display='none';if(vc){if(!latest){vc.innerHTML=`<span class="ver-na">No registry data</span>`;return;}const same=(latest===a._version);vc.innerHTML=`<div class="ver-row">Current: <b>${escHtml(a._version||'?')}</b> <span class="ver-badge ${same?'ver-ok':'ver-old'}">${same?'Up to date':'Outdated'}</span></div>${!same?`<div class="ver-row" style="color:#8b949e">Latest: <b style="color:#e6edf3">${escHtml(latest)}</b></div>`:''}`;}});
+      if(cs&&cc) fetchCVEsAsync(a._purl,a._version).then(vulns=>{if(cs)cs.style.display='none';if(cc){if(!vulns){cc.innerHTML=`<span class="cve-error">Could not fetch</span>`;return;}cc.innerHTML=vulns.length===0?`<span class="no-cve">✓ No known vulnerabilities</span>`:`<div class="cve-list">${vulns.slice(0,6).map(v=>{const sev=(v.database_specific?.severity||'UNKNOWN').toUpperCase();const alias=v.aliases?.find(a=>a.startsWith('CVE-'))||v.id;let fixed=null;for(const aff of(v.affected||[]))for(const rng of(aff.ranges||[])){const f=rng.events?.find(e=>e.fixed)?.fixed;if(f){fixed=f;break;}}return `<div class="cve-item"><div class="cve-header"><a class="cve-id" href="https://osv.dev/vulnerability/${v.id}" target="_blank">${alias}</a><span class="sev sev-${sev}">${sev}</span></div>${v.summary?`<div class="cve-summary">${escHtml(v.summary)}</div>`:''}${fixed?`<div class="cve-fix">✓ Fixed in ${escHtml(fixed)}</div>`:'<div class="cve-no-fix">No fix</div>'}</div>`;}).join('')}</div>`;}});
+    }
+  }
+  graph.forEachNode(k=>graph.setNodeAttribute(k,'highlighted',k===node));
+  renderer.refresh();
+  renderPriorities();
+});
+
+renderer.on('clickStage',()=>{
+  detail.innerHTML='<div class="no-sel">Click a node to inspect</div>';
+  graph.forEachNode(k=>graph.setNodeAttribute(k,'highlighted',false));
+  renderer.refresh();
+  updateStats();
+  renderPriorities();
+});
+
+renderer.on('doubleClickNode',({node})=>{
+  setFocus(node, state.focusDepth||2);
+});
+
+// ── Tooltip ────────────────────────────────────────────────────────────────
+const tooltip=document.getElementById('tooltip');
+renderer.on('enterNode',({node})=>{
+  const a=graph.getNodeAttributes(node);
+  const aud=secAudit[node]||null;
+  document.getElementById('tt-name').textContent=a.label;
+  if(a._type==='repository'){
+    document.getElementById('tt-sub').textContent=`${a._pkg_count} packages · degree ${graph.degree(node)}`;
+  } else {
+    const parts=[`${a._ecosystem}`,`${a._repo_count} repo${a._repo_count!==1?'s':''}`];
+    if((a._usage_score||0)>0) parts.push(`★ ${(a._usage_score).toFixed(1)}`);
+    if(aud?.cve_count>0) parts.push(`⚠ ${aud.cve_count} CVE${aud.cve_count!==1?'s':''} (${aud.max_severity}${aud.max_cvss!=null?` ${aud.max_cvss.toFixed(1)}`:''})`);
+    if(aud?.is_latest===false) {
+      const ttGap = majorGap(a._version, aud.latest_version);
+      parts.push(ttGap>0 ? `⛔ breaking +${ttGap}maj → ${aud.latest_version}` : `⚡ outdated → ${aud.latest_version}`);
+    }
+    if(aud?.is_latest===true)  parts.push('✓ latest');
+    if(a._has_conflict) parts.push('⚡ version conflict');
+    if(a._dep_completeness!=null) parts.push(`coverage ${Math.round(a._dep_completeness*100)}%`);
+    document.getElementById('tt-sub').textContent=parts.join(' · ');
+  }
+  tooltip.style.display='block';
+});
+renderer.on('leaveNode',()=>{tooltip.style.display='none';});
+document.getElementById('sigma-container').addEventListener('mousemove',e=>{
+  tooltip.style.left=`${e.offsetX+16}px`;tooltip.style.top=`${e.offsetY-10}px`;
+});
+
+// ── Controls ───────────────────────────────────────────────────────────────
+document.getElementById('btn-reset').onclick=()=>{
+  if(state.focusedKey) { clearFocus(true); return; }
+  renderer.getCamera().animate({x:0.5,y:0.5,ratio:INITIAL_RATIO,angle:0},{duration:300});
+  graph.forEachNode(k=>graph.setNodeAttribute(k,'highlighted',false));
+  renderer.refresh();
+};
+document.getElementById('btn-zin').onclick=()=>renderer.getCamera().animatedZoom({ratio:0.5});
+document.getElementById('btn-zout').onclick=()=>renderer.getCamera().animatedUnzoom({ratio:0.5});
+
+function tick(){return new Promise(r=>setTimeout(r,0));}
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ── Priorities tab ─────────────────────────────────────────────────────────
+const DISMISSED_KEY = 'sbom-pri-dismissed';
+function getDismissed() {
+  try { return new Set(JSON.parse(localStorage.getItem(DISMISSED_KEY)||'[]')); } catch { return new Set(); }
+}
+function addDismissed(key) {
+  const d = getDismissed(); d.add(key);
+  localStorage.setItem(DISMISSED_KEY, JSON.stringify([...d]));
+}
+
+const priScoreColor = VizUtils.priScoreColor;
+
+function calcPackagePriority(key, attrs) {
+  return VizUtils.calcPackagePriority(key, attrs, secAudit, maxUsageScore);
+}
+
+function pkgPriorityCard(key, attrs, score) {
+  const aud = secAudit[key];
+  const sc  = priScoreColor(score);
+  const name = attrs._name || attrs.label || key;
+  const ver  = attrs._version ? ` <span style="color:#6e7681;font-weight:400">${escHtml(attrs._version)}</span>` : '';
+  const eco  = attrs._ecosystem || '';
+  const us   = attrs._usage_score || 0;
+
+  const issues = [];
+  const pkgGap = majorGap(attrs._version, aud?.latest_version);
+  if (aud?.cve_count > 0) {
+    const fix = aud.fix_version ? ` · Fix: ${escHtml(aud.fix_version)}` : '';
+    const breakNote = pkgGap > 0 ? ` · ⛔ fix needs +${pkgGap} major` : '';
+    issues.push(`<span class="pc-issue cve">⚠ ${aud.cve_count} CVE${aud.cve_count!==1?'s':''} · ${aud.max_severity}${aud.max_cvss!=null?` ${aud.max_cvss.toFixed(1)}`:''}${fix}${breakNote}</span>`);
+  }
+  if (aud?.abandoned)                              issues.push(`<span class="pc-issue abandoned">☠ Abandoned</span>`);
+  if (aud?.is_latest===false && !(aud?.cve_count>0)) {
+    const breakNote = pkgGap > 0 ? ` <span class="pc-issue" style="color:#f97316">⛔ +${pkgGap} major version${pkgGap!==1?'s':''} behind</span>` : '';
+    issues.push(`<span class="pc-issue outdated">⚡ Outdated → ${escHtml(aud.latest_version||'?')}</span>${breakNote}`);
+  }
+  if (aud?.confusion_risk)                         issues.push(`<span class="pc-issue confusion">🎭 Confusion risk</span>`);
+  if (us > 0) issues.push(`<span class="pc-issue" style="color:#6e7681">★ Reach ${us.toFixed(1)} · ${attrs._repo_count||0} repos direct</span>`);
+
+  return `<div class="priority-card" data-key="${escHtml(key)}">
+    <div class="pc-header">
+      <span class="pc-score" style="background:${sc}22;color:${sc};border:1px solid ${sc}44">${score}</span>
+      <span class="pc-name" title="${escHtml(attrs._purl||key)}">${escHtml(name)}${ver}</span>
+      <span class="pc-eco">${escHtml(eco)}</span>
+      <button class="pc-dismiss" title="Dismiss">✕</button>
+    </div>
+    ${issues.length?`<div class="pc-issues">${issues.join('')}</div>`:''}
+    <div><button class="pc-focus">📌 Focus</button></div>
+  </div>`;
+}
+
+function repoPriorityCard(key, attrs) {
+  const risk  = repoRiskScores[attrs._name] || {};
+  const score = risk.score || 0;
+  if (!score && !risk.cve_count) return '';
+  const sc   = priScoreColor(score);
+  const name = attrs._name || key.replace('repo:','');
+  const issues = [];
+  const topCVE = risk.critical || risk.high;
+  if (risk.critical)      issues.push(`<span class="pc-issue cve">⚠ ${risk.critical} CRITICAL</span>`);
+  else if (risk.high)     issues.push(`<span class="pc-issue cve">⚠ ${risk.high} HIGH</span>`);
+  else if (risk.cve_count) issues.push(`<span class="pc-issue cve">⚠ ${risk.cve_count} CVE${risk.cve_count!==1?'s':''}</span>`);
+  if (risk.abandoned)     issues.push(`<span class="pc-issue abandoned">☠ ${risk.abandoned} abandoned</span>`);
+  if (risk.outdated)      issues.push(`<span class="pc-issue outdated">⚡ ${risk.outdated} outdated</span>`);
+  return `<div class="priority-card" data-key="${escHtml(key)}">
+    <div class="pc-header">
+      <span class="pc-score" style="background:${sc}22;color:${sc};border:1px solid ${sc}44">${score}</span>
+      <span class="pc-name" title="${escHtml(name)}">📁 ${escHtml(name)}</span>
+      <button class="pc-dismiss" title="Dismiss">✕</button>
+    </div>
+    ${issues.length?`<div class="pc-issues">${issues.join('')}</div>`:''}
+    <div><button class="pc-focus">📌 Focus</button></div>
+  </div>`;
+}
+
+function renderPriorities() {
+  if (document.getElementById('tab-priorities').style.display === 'none') return;
+  const content = document.getElementById('priorities-content');
+  const scopeEl = document.getElementById('priorities-scope');
+  const dismissed = getDismissed();
+
+  const pkgKeys = [], repoKeys = [];
+  if (state.focusedKey) {
+    const fa = graph.getNodeAttributes(state.focusedKey);
+    const bfsVis = new Set([state.focusedKey]);
+    let frontier = [state.focusedKey];
+    while (frontier.length) {
+      const next = [];
+      frontier.forEach(k => {
+        const a = graph.getNodeAttributes(k);
+        if (a._type === 'package')    pkgKeys.push(k);
+        else if (a._type === 'repository') repoKeys.push(k);
+        graph.forEachOutEdge(k, (e, ea, s, t) => {
+          if (!bfsVis.has(t) && (ea._type==='contains'||ea._type==='depends_on')) {
+            bfsVis.add(t); next.push(t);
+          }
+        });
+      });
+      frontier = next;
+    }
+    scopeEl.textContent = `Focused: ${fa.label || fa._name || state.focusedKey.replace('repo:','')}`;
+  } else {
+    visibleSet.forEach(k => {
+      const a = graph.getNodeAttributes(k);
+      if (a._type === 'package')    pkgKeys.push(k);
+      else if (a._type === 'repository') repoKeys.push(k);
+    });
+    const filtersOn = state.repos.size>0 || state.search || state.cveOnly || state.outdatedOnly ||
+                      state.abandonedOnly || state.conflictsOnly || state.confusionOnly ||
+                      state.minSeverity || state.minRepos>1;
+    scopeEl.textContent = `${filtersOn?'Filtered':'All visible'} · ${pkgKeys.length.toLocaleString()} pkgs · ${repoKeys.length} repos`;
+  }
+
+  // Score + sort packages
+  const pkgScored = pkgKeys
+    .filter(k => !dismissed.has(k))
+    .map(k => { const a=graph.getNodeAttributes(k); return {k, a, score:calcPackagePriority(k,a)}; })
+    .filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  // Score + sort repos by audit risk score
+  const repoScored = repoKeys
+    .filter(k => !dismissed.has(k))
+    .map(k => ({ k, a: graph.getNodeAttributes(k) }))
+    .filter(({a}) => { const r=repoRiskScores[a._name]; return r && r.score>0; })
+    .sort((x, y) => (repoRiskScores[y.a._name]?.score||0) - (repoRiskScores[x.a._name]?.score||0));
+
+  let html = '';
+  if (!pkgScored.length && !repoScored.length) {
+    html = `<div class="pri-empty">No priority issues in current view</div>`;
+  }
+  if (pkgScored.length) {
+    html += `<div class="pri-section-title">Packages (${pkgScored.length})</div>`;
+    pkgScored.forEach(({k, a, score}) => { html += pkgPriorityCard(k, a, score); });
+  }
+  if (repoScored.length) {
+    html += `<div class="pri-section-title">Repositories (${repoScored.length})</div>`;
+    repoScored.forEach(({k, a}) => { html += repoPriorityCard(k, a); });
+  }
+
+  content.innerHTML = html;
+
+  content.querySelectorAll('.pc-dismiss').forEach(btn => {
+    btn.addEventListener('click', e => {
+      addDismissed(e.target.closest('.priority-card').dataset.key);
+      renderPriorities();
+    });
+  });
+  content.querySelectorAll('.pc-focus').forEach(btn => {
+    btn.addEventListener('click', e => {
+      setFocus(e.target.closest('.priority-card').dataset.key, state.focusDepth || 2);
+    });
+  });
+  content.querySelectorAll('.pc-name').forEach(el => {
+    el.addEventListener('click', e => {
+      const key = e.target.closest('.priority-card').dataset.key;
+      switchTab('overview');
+      renderer.emit('clickNode', { node: key, event: {} });
+    });
+  });
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.right-tab').forEach(t => t.classList.toggle('active', t.dataset.tab===name));
+  document.getElementById('tab-overview').style.display   = name==='overview'   ? 'flex' : 'none';
+  document.getElementById('tab-priorities').style.display = name==='priorities' ? 'flex' : 'none';
+  if (name === 'priorities') renderPriorities();
+}
+
+document.querySelectorAll('.right-tab').forEach(tab => tab.addEventListener('click', ()=>switchTab(tab.dataset.tab)));
+document.getElementById('pri-reset-btn').addEventListener('click', ()=>{ localStorage.removeItem(DISMISSED_KEY); renderPriorities(); });
+
+applyFilters();
+// Zoom computed dynamically from layout so arc-spacing ≥ node diameter at startup.
+renderer.getCamera().setState({ ratio: INITIAL_RATIO });
+})();
+
+// ── Sources panel (Docker mode only) ─────────────────────────────────────────
+(async function() {
+  let serverStatus = null;
+  try {
+    const r = await fetch('/status', { signal: AbortSignal.timeout(800) });
+    if (!r.ok) return;
+    serverStatus = await r.json();
+  } catch { return; }
+
+  const btn   = document.getElementById('sources-btn');
+  const panel = document.getElementById('sources-panel');
+  const dot   = document.getElementById('sb-dot');
+  const label = document.getElementById('sb-label');
+  const list  = document.getElementById('sp-list');
+  const input = document.getElementById('sp-input');
+  const addBtn= document.getElementById('sp-add-btn');
+  const status= document.getElementById('sp-status');
+  const spinner=document.getElementById('sp-spinner');
+  const statusTxt=document.getElementById('sp-status-text');
+
+  btn.style.display = 'flex';
+
+  function normalize(s) {
+    return s.trim().toLowerCase()
+      .replace(/^https?:\/\//, '').replace(/^github\.com\//, '').replace(/\/$/, '');
+  }
+  function isRepo(s) { return s.split('/').length >= 2; }
+
+  function renderSources(targets, scanning) {
+    list.innerHTML = '';
+    targets.forEach(t => {
+      const repo = isRepo(t);
+      const item = document.createElement('div');
+      item.className = 'sp-item';
+      item.innerHTML = `<span class="sp-badge ${repo?'sp-repo':'sp-org'}">${repo?'repo':'org'}</span>`
+        + `<span class="sp-name">${t}</span>`
+        + (scanning ? '' : `<button class="sp-rm" data-t="${t}">✕</button>`);
+      list.appendChild(item);
+    });
+    list.querySelectorAll('.sp-rm').forEach(b => b.addEventListener('click', async () => {
+      await apiCall('/remove', { target: b.dataset.t });
+    }));
+    label.textContent = `Sources (${targets.length})`;
+    dot.className = 'sb-dot' + (scanning ? ' scanning' : '');
+    status.style.display = scanning ? 'flex' : 'none';
+    addBtn.disabled = scanning;
+    input.disabled = scanning;
+  }
+
+  async function apiCall(path, body) {
+    const r = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return r.json();
+  }
+
+  async function pollUntilDone() {
+    while (true) {
+      await new Promise(r => setTimeout(r, 2000));
+      let s;
+      try { const r = await fetch('/status'); s = await r.json(); } catch { break; }
+      renderSources(s.targets, s.status === 'scanning');
+      statusTxt.textContent = s.status === 'scanning' ? 'Scanning…' : (s.status === 'error' ? 'Error — check console' : 'Done');
+      if (s.status === 'done') {
+        // Reload graph data without full page refresh
+        try {
+          const [gR, aR] = await Promise.all([
+            fetch('../graph/dep_graph.json'),
+            fetch('../security_audit.json'),
+          ]);
+          if (gR.ok) { location.reload(); } // simplest: reload page to re-render
+        } catch {}
+        break;
+      }
+      if (s.status !== 'scanning') break;
+    }
+  }
+
+  addBtn.addEventListener('click', async () => {
+    const val = normalize(input.value);
+    if (!val) return;
+    input.value = '';
+    status.style.display = 'flex';
+    statusTxt.textContent = 'Starting scan…';
+    spinner.style.display = 'block';
+    await apiCall('/add', { target: val });
+    pollUntilDone();
+  });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') addBtn.click(); });
+
+  btn.addEventListener('click', () => {
+    const open = panel.style.display === 'flex';
+    panel.style.display = open ? 'none' : 'flex';
+  });
+
+  // Close panel on outside click
+  document.addEventListener('click', e => {
+    if (!panel.contains(e.target) && e.target !== btn) panel.style.display = 'none';
+  });
+
+  // Initial render + poll if already scanning
+  renderSources(serverStatus.targets, serverStatus.status === 'scanning');
+  if (serverStatus.status === 'scanning') pollUntilDone();
+})();
+</script>
+</body>
+</html>

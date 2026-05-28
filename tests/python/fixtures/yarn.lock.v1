@@ -1,0 +1,25 @@
+# yarn lockfile v1
+
+
+"@babel/core@^7.21.0":
+  version "7.21.4"
+  resolved "https://registry.yarnpkg.com/@babel/core/-/core-7.21.4.tgz"
+  integrity sha512-xxx
+  dependencies:
+    semver "^6.3.0"
+    json5 "^2.2.2"
+
+json5@^2.2.2:
+  version "2.2.3"
+  resolved "https://registry.yarnpkg.com/json5/-/json5-2.2.3.tgz"
+  integrity sha512-yyy
+
+lodash@^4.17.21:
+  version "4.17.21"
+  resolved "https://registry.yarnpkg.com/lodash/-/lodash-4.17.21.tgz"
+  integrity sha512-zzz
+
+semver@^6.3.0:
+  version "6.3.1"
+  resolved "https://registry.yarnpkg.com/semver/-/semver-6.3.1.tgz"
+  integrity sha512-aaa

@@ -1,0 +1,17 @@
+repos/
+.venv/
+output/sbom/
+output/graph/
+output/cache/
+output/viz/lib/graphology.umd.min.js
+output/viz/lib/sigma.min.js
+output/repos_overview.csv
+output/clone_errors.log
+output/sbom_errors.log
+*.pyc
+__pycache__/
+.pytest_cache/
+.DS_Store
+
+output/security_audit.json
+output/history.json

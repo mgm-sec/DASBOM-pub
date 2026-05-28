@@ -1,0 +1,21 @@
+{
+    "_readme": ["This file is @generated automatically."],
+    "content-hash": "abc123",
+    "packages": [
+        {
+            "name": "symfony/console",
+            "version": "v6.2.7",
+            "source": {"type": "git", "url": "https://github.com/symfony/console.git"}
+        },
+        {
+            "name": "psr/log",
+            "version": "3.0.0",
+            "require": {
+                "symfony/console": "^6.0"
+            }
+        }
+    ],
+    "packages-dev": [],
+    "platform": {},
+    "platform-dev": {}
+}

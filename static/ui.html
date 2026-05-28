@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sbom-viz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #07090e;
+  --surface:   #0c1018;
+  --surface2:  #111721;
+  --border:    #1a2433;
+  --border2:   #243044;
+  --accent:    #00c9a7;
+  --accent-dim:#00c9a718;
+  --accent-glow:#00c9a740;
+  --blue:      #3b82f6;
+  --blue-dim:  #3b82f618;
+  --amber:     #f59e0b;
+  --green:     #10b981;
+  --red:       #ef4444;
+  --text:      #dde5f0;
+  --text-2:    #8895aa;
+  --text-3:    #4a5568;
+  --mono:      'IBM Plex Mono', monospace;
+  --sans:      'IBM Plex Sans', system-ui, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  font-size: 13px;
+  /* subtle grid bg */
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: -1px -1px;
+}
+
+/* ── Card ── */
+.card {
+  width: 520px;
+  max-width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px #ffffff04, 0 32px 64px #00000080;
+}
+
+/* ── Header ── */
+.header {
+  padding: 20px 24px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.logo {
+  font-family: var(--mono);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: -.01em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.logo::before {
+  content: '';
+  display: block;
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--accent);
+}
+.tagline {
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 300;
+  margin-top: 3px;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+.version {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-3);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 7px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Body ── */
+.body { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+
+/* ── Input ── */
+.input-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: 8px;
+}
+.input-wrap {
+  display: flex;
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color .15s, box-shadow .15s;
+}
+.input-wrap:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.input-prompt {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--accent);
+  padding: 0 10px 0 14px;
+  user-select: none;
+  flex-shrink: 0;
+}
+.input-wrap input {
+  flex: 1;
+  padding: 10px 0;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  outline: none;
+  caret-color: var(--accent);
+}
+.input-wrap input::placeholder { color: var(--text-3); }
+.btn-add {
+  padding: 10px 16px;
+  background: var(--surface2);
+  border: none;
+  border-left: 1px solid var(--border);
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .12s, color .12s;
+  white-space: nowrap;
+}
+.btn-add:hover:not(:disabled) { background: var(--border2); color: var(--text); }
+.btn-add:disabled { opacity: .4; cursor: default; }
+
+.hint {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 5px;
+  font-style: italic;
+}
+
+/* ── Targets ── */
+.targets-section { display: flex; flex-direction: column; gap: 6px; }
+.targets-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.targets-count {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-radius: 8px;
+  padding: 1px 7px;
+  font-size: 10px;
+}
+.targets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.targets-list::-webkit-scrollbar { width: 3px; }
+.targets-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.empty {
+  padding: 14px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-3);
+  border: 1px dashed var(--border);
+  border-radius: 7px;
+  font-style: italic;
+}
+
+.target-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  animation: slideIn .18s ease;
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.t-badge {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: .04em;
+  flex-shrink: 0;
+}
+.t-org  { background: var(--accent-dim);  color: var(--accent); border: 1px solid var(--accent-glow); }
+.t-repo { background: var(--blue-dim);    color: var(--blue);   border: 1px solid #3b82f630; }
+.t-name {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  word-break: break-all;
+  line-height: 1.4;
+}
+.t-sub { font-size: 10px; color: var(--text-3); display: block; }
+.t-rm {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-3); font-size: 14px; line-height: 1;
+  padding: 2px 4px; border-radius: 4px;
+  transition: color .1s, background .1s;
+  flex-shrink: 0;
+}
+.t-rm:hover { color: var(--red); background: #ef444418; }
+
+/* ── Scan button ── */
+.btn-scan {
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  letter-spacing: .04em;
+  position: relative;
+  overflow: hidden;
+  transition: color .15s, background .15s, box-shadow .15s;
+}
+.btn-scan::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .3s ease;
+  z-index: 0;
+}
+.btn-scan:hover:not(:disabled)::before { transform: scaleX(1); }
+.btn-scan:hover:not(:disabled) { color: #07090e; box-shadow: 0 0 20px var(--accent-glow); }
+.btn-scan:disabled { border-color: var(--border2); color: var(--text-3); cursor: default; }
+.btn-scan > * { position: relative; z-index: 1; }
+.scan-arrow { font-size: 16px; transition: transform .2s; }
+.btn-scan:hover:not(:disabled) .scan-arrow { transform: translateX(4px); }
+
+/* ── Progress ── */
+#progress-section { display: none; }
+
+.prog-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+.prog-indicator {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.prog-indicator.running {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  animation: glow-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes glow-pulse { to { box-shadow: 0 0 16px var(--accent), 0 0 4px var(--accent); } }
+.prog-indicator.done   { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.prog-indicator.error  { background: var(--red);   box-shadow: 0 0 8px var(--red); }
+
+.prog-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-2);
+  flex: 1;
+  letter-spacing: .03em;
+}
+.prog-step-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+/* Step track */
+.step-track {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.step-track::-webkit-scrollbar { height: 0; }
+.step-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+.step-node:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 9px;
+  left: 50%;
+  width: 100%;
+  height: 1px;
+  background: var(--border2);
+  z-index: 0;
+}
+.step-node.done::after   { background: var(--green); }
+.step-node.active::after { background: var(--border2); }
+.step-dot {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border2);
+  background: var(--surface);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px;
+  position: relative; z-index: 1;
+  transition: all .3s;
+  flex-shrink: 0;
+}
+.step-node.done .step-dot   { border-color: var(--green); background: #10b98120; color: var(--green); }
+.step-node.active .step-dot {
+  border-color: var(--accent); background: var(--accent-dim);
+  box-shadow: 0 0 10px var(--accent-glow);
+  animation: spin-dot 1.2s linear infinite;
+}
+@keyframes spin-dot {
+  0%,100% { box-shadow: 0 0 6px var(--accent-glow); }
+  50%      { box-shadow: 0 0 14px var(--accent); }
+}
+.step-node.error .step-dot  { border-color: var(--red); background: #ef444420; color: var(--red); }
+.step-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text-3);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 44px;
+}
+.step-node.done .step-label   { color: var(--green); }
+.step-node.active .step-label { color: var(--accent); }
+
+/* Log box */
+.log-wrap {
+  padding: 0 0 0 0;
+  position: relative;
+}
+#log-box {
+  background: var(--bg);
+  padding: 12px 16px;
+  height: 200px;
+  overflow-y: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.6;
+  /* CRT scanlines */
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,.06) 2px,
+    rgba(0,0,0,.06) 4px
+  );
+}
+#log-box::-webkit-scrollbar { width: 3px; }
+#log-box::-webkit-scrollbar-thumb { background: var(--border2); }
+.log-step { color: var(--accent); font-weight: 500; }
+.log-ok   { color: var(--green); }
+.log-err  { color: var(--red); }
+.log-info { color: var(--text-2); }
+
+/* Done state */
+.done-section {
+  display: none;
+  padding: 20px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+  flex-direction: column;
+  gap: 12px;
+}
+.done-stats {
+  display: flex;
+  gap: 12px;
+}
+.stat-chip {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 10px;
+  text-align: center;
+}
+.stat-val {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  display: block;
+  line-height: 1;
+}
+.stat-lbl {
+  font-size: 10px;
+  color: var(--text-3);
+  margin-top: 3px;
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.btn-open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  color: #07090e;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  letter-spacing: .04em;
+  transition: box-shadow .2s;
+}
+.btn-open:hover { box-shadow: 0 0 24px var(--accent-glow); }
+.btn-rescan {
+  background: none;
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 9px;
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+  text-align: center;
+}
+.btn-rescan:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Footer ── */
+footer {
+  margin-top: 14px;
+  font-size: 11px;
+  color: var(--text-3);
+  text-align: center;
+  font-style: italic;
+}
+footer a { color: var(--text-3); text-decoration: underline; text-underline-offset: 2px; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <div class="logo">sbom-viz</div>
+      <div class="tagline">Supply chain security scanner</div>
+    </div>
+    <div class="version">v0.2</div>
+  </div>
+
+  <!-- Input body -->
+  <div class="body" id="input-body">
+    <div>
+      <div class="input-label">GitHub target</div>
+      <div class="input-wrap">
+        <span class="input-prompt">›</span>
+        <input id="url-input" type="text"
+          placeholder="github.com/org  or  github.com/org/repo"
+          autocomplete="off" autocorrect="off" spellcheck="false">
+        <button class="btn-add" id="btn-add">+ ADD</button>
+      </div>
+      <div class="hint">Accepts org URLs, single repo URLs, or bare names. Press Enter to add.</div>
+    </div>
+
+    <div class="targets-section">
+      <div class="targets-header">
+        <span>Targets</span>
+        <span class="targets-count" id="targets-count" style="display:none">0</span>
+      </div>
+      <div class="targets-list" id="targets-list">
+        <div class="empty" id="empty-hint">No targets yet</div>
+      </div>
+    </div>
+
+    <button class="btn-scan" id="btn-scan" disabled>
+      <span>INITIATE SCAN</span>
+      <span class="scan-arrow">→</span>
+    </button>
+  </div>
+
+  <!-- Progress section -->
+  <div id="progress-section">
+    <div class="prog-header">
+      <div class="prog-indicator running" id="prog-dot"></div>
+      <div class="prog-title" id="prog-title">Scanning…</div>
+      <div class="prog-step-label" id="prog-step"></div>
+    </div>
+
+    <!-- Step track -->
+    <div class="step-track" id="step-track">
+      <!-- filled by JS -->
+    </div>
+
+    <!-- Log stream -->
+    <div class="log-wrap">
+      <div id="log-box"></div>
+    </div>
+  </div>
+
+  <!-- Done section -->
+  <div class="done-section" id="done-section">
+    <div class="done-stats" id="done-stats"></div>
+    <a class="btn-open" href="/viz/" id="btn-open">
+      Open Visualization →
+    </a>
+    <button class="btn-rescan" id="btn-rescan">← Scan different targets</button>
+  </div>
+</div>
+
+<footer>
+  No <code>GH_TOKEN</code>? Public repos only.
+  <a href="https://github.com/settings/tokens" target="_blank" rel="noopener">Create token →</a>
+</footer>
+
+<script>
+// ── Pipeline steps ────────────────────────────────────────────────────────────
+const STEPS = [
+  { key: '00b_parse',      label: 'Parse'   },
+  { key: '02_clone',       label: 'Clone'   },
+  { key: '03_generate',    label: 'SBOM'    },
+  { key: '05_merge',       label: 'Merge'   },
+  { key: '06_build',       label: 'Graph'   },
+  { key: '07_setup',       label: 'Setup'   },
+  { key: '08b_lockfile',   label: 'Lock'    },
+  { key: '08_enrich',      label: 'Enrich'  },
+  { key: '09_security',    label: 'Audit'   },
+  { key: '10_snapshot',    label: 'History' },
+];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const targets = [];
+let activeStep = -1;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function normalize(raw) {
+  return raw.trim().toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/^github\.com\//, '')
+    .replace(/\/$/, '');
+}
+function isRepo(s) { return (s.match(/\//g) || []).length >= 1; }
+
+// ── Render targets list ───────────────────────────────────────────────────────
+function renderTargets() {
+  const list  = document.getElementById('targets-list');
+  const count = document.getElementById('targets-count');
+  const scan  = document.getElementById('btn-scan');
+  const empty = document.getElementById('empty-hint');
+
+  list.innerHTML = '';
+  if (targets.length === 0) {
+    list.appendChild(empty);
+    count.style.display = 'none';
+    scan.disabled = true;
+    return;
+  }
+  count.style.display = '';
+  count.textContent = targets.length;
+  scan.disabled = false;
+
+  targets.forEach((t, i) => {
+    const repo = isRepo(t);
+    const parts = t.split('/');
+    const el = document.createElement('div');
+    el.className = 'target-item';
+    el.innerHTML = `
+      <span class="t-badge ${repo ? 't-repo' : 't-org'}">${repo ? 'REPO' : 'ORG'}</span>
+      <span class="t-name">
+        github.com/<strong>${t}</strong>
+        <span class="t-sub">${repo ? 'single repository' : 'all repositories in org'}</span>
+      </span>
+      <button class="t-rm" data-i="${i}" title="Remove">✕</button>`;
+    list.appendChild(el);
+  });
+
+  list.querySelectorAll('.t-rm').forEach(btn => {
+    btn.addEventListener('click', () => {
+      targets.splice(parseInt(btn.dataset.i), 1);
+      renderTargets();
+    });
+  });
+}
+
+// ── Add target ────────────────────────────────────────────────────────────────
+function addTarget() {
+  const input = document.getElementById('url-input');
+  const val = normalize(input.value);
+  if (!val) return;
+  if (!targets.includes(val)) {
+    targets.push(val);
+    renderTargets();
+  }
+  input.value = '';
+  input.focus();
+}
+
+document.getElementById('btn-add').addEventListener('click', addTarget);
+document.getElementById('url-input').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  if (document.getElementById('url-input').value.trim()) {
+    addTarget();
+  } else if (targets.length > 0) {
+    document.getElementById('btn-scan').click();
+  }
+});
+
+// ── Build step track ──────────────────────────────────────────────────────────
+function buildStepTrack() {
+  const track = document.getElementById('step-track');
+  track.innerHTML = STEPS.map((s, i) =>
+    `<div class="step-node pending" id="step-${i}">
+      <div class="step-dot" id="step-dot-${i}"></div>
+      <div class="step-label">${s.label}</div>
+    </div>`
+  ).join('');
+}
+
+function setStepState(idx, state) {
+  if (idx < 0 || idx >= STEPS.length) return;
+  const node = document.getElementById(`step-${idx}`);
+  const dot  = document.getElementById(`step-dot-${idx}`);
+  if (!node) return;
+  node.className = `step-node ${state}`;
+  dot.textContent = state === 'done' ? '✓' : state === 'error' ? '✗' : '';
+}
+
+function stepIndexFromLine(line) {
+  for (let i = 0; i < STEPS.length; i++) {
+    if (line.includes(STEPS[i].key)) return i;
+  }
+  return -1;
+}
+
+// ── Log rendering ─────────────────────────────────────────────────────────────
+function appendLog(line) {
+  const box = document.getElementById('log-box');
+  const div = document.createElement('div');
+
+  if (line.startsWith('▶')) {
+    div.className = 'log-step';
+    const idx = stepIndexFromLine(line);
+    if (idx >= 0) {
+      if (activeStep >= 0 && activeStep !== idx) setStepState(activeStep, 'done');
+      activeStep = idx;
+      setStepState(idx, 'active');
+      document.getElementById('prog-step').textContent = `${idx + 1}/${STEPS.length}`;
+    }
+  } else if (line.startsWith('✓')) {
+    div.className = 'log-ok';
+    const idx = stepIndexFromLine(line);
+    if (idx >= 0) setStepState(idx, 'done');
+  } else if (line.startsWith('✗') || /error/i.test(line)) {
+    div.className = 'log-err';
+  } else if (line.match(/^\[[\d:]+\]/)) {
+    div.className = 'log-info';
+  }
+
+  div.textContent = line;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ── Scan ──────────────────────────────────────────────────────────────────────
+function setInputsDisabled(disabled) {
+  ['btn-add', 'btn-scan', 'url-input'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = disabled;
+  });
+  document.querySelectorAll('.t-rm').forEach(b => b.disabled = disabled);
+}
+
+function showProgress() {
+  document.getElementById('progress-section').style.display = 'block';
+  document.getElementById('done-section').style.display = 'none';
+  document.getElementById('log-box').innerHTML = '';
+  buildStepTrack();
+  activeStep = -1;
+  document.getElementById('prog-dot').className = 'prog-indicator running';
+  document.getElementById('prog-title').textContent = 'Scanning…';
+  document.getElementById('prog-step').textContent = `0/${STEPS.length}`;
+}
+
+function showDone(status) {
+  const dot = document.getElementById('prog-dot');
+  dot.className = `prog-indicator ${status === 'done' ? 'done' : 'error'}`;
+  document.getElementById('prog-title').textContent = status === 'done' ? 'Scan complete' : 'Scan failed';
+
+  if (status === 'done') {
+    // Mark any remaining active step as done
+    if (activeStep >= 0) setStepState(activeStep, 'done');
+    STEPS.forEach((_, i) => {
+      const node = document.getElementById(`step-${i}`);
+      if (node && node.className.includes('pending')) setStepState(i, 'done');
+    });
+
+    fetchScanStats().then(stats => {
+      document.getElementById('done-section').style.display = 'flex';
+      document.getElementById('done-stats').innerHTML = stats.map(s =>
+        `<div class="stat-chip">
+          <span class="stat-val">${s.val}</span>
+          <span class="stat-lbl">${s.lbl}</span>
+        </div>`
+      ).join('');
+    });
+  }
+}
+
+async function fetchScanStats() {
+  try {
+    const r = await fetch('/security_audit.json');
+    if (!r.ok) return [];
+    const d = await r.json();
+    return [
+      { val: d.total_packages ?? '—', lbl: 'Packages' },
+      { val: d.with_cve       ?? '—', lbl: 'CVEs'     },
+      { val: d.outdated       ?? '—', lbl: 'Outdated'  },
+      { val: d.abandoned      ?? '—', lbl: 'Abandoned' },
+    ];
+  } catch { return []; }
+}
+
+document.getElementById('btn-scan').addEventListener('click', async () => {
+  if (targets.length === 0) return;
+  showProgress();
+  setInputsDisabled(true);
+
+  await fetch('/scan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ targets }),
+  });
+
+  connectStream();
+});
+
+function connectStream() {
+  const es = new EventSource('/stream');
+
+  es.onmessage = e => appendLog(JSON.parse(e.data));
+
+  es.addEventListener('done', e => {
+    es.close();
+    const payload = JSON.parse(e.data);
+    showDone(payload.status);
+    setInputsDisabled(false);
+  });
+
+  es.onerror = () => {
+    es.close();
+    appendLog('✗ Connection lost');
+    setInputsDisabled(false);
+  };
+}
+
+// ── Rescan ────────────────────────────────────────────────────────────────────
+document.getElementById('btn-rescan').addEventListener('click', () => {
+  document.getElementById('progress-section').style.display = 'none';
+  document.getElementById('done-section').style.display = 'none';
+  renderTargets();
+});
+
+// ── Resume if already scanning on page load ───────────────────────────────────
+(async () => {
+  try {
+    const r = await fetch('/status');
+    const s = await r.json();
+    if (s.status === 'scanning') {
+      s.targets.forEach(t => { if (!targets.includes(t)) targets.push(t); });
+      renderTargets();
+      showProgress();
+      setInputsDisabled(true);
+      connectStream();
+    }
+  } catch {}
+})();
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+renderTargets();
+document.getElementById('url-input').focus();
+</script>
+</body>
+</html>
