@@ -1,0 +1,12 @@
+.git/
+.venv/
+repos/
+output/sbom/
+output/graph/
+output/cache/
+tests/js/node_modules/
+*.pyc
+__pycache__/
+.DS_Store
+.env
+.env.*

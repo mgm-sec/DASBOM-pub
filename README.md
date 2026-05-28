@@ -13,14 +13,25 @@ This project is **vibe-coded** — built rapidly with AI assistance. As such:
 - **No security guarantees.** This tool is not audited. Do not use scan results as the sole basis for security decisions.
 - **External API calls are made at runtime** to GitHub, OSV.dev, npm, PyPI, RubyGems, crates.io, and other package registries. Review the pipeline scripts before running in sensitive environments.
 - **The Docker container requires a GitHub token** with repo access. Scope it to the minimum necessary (`public_repo` for public repos only).
+- The container runs as a **non-root user** with dropped Linux capabilities and a SHA256-pinned base image.
 
 Use at your own risk. Contributions and bug reports welcome.
 
 ---
 
-## Docker (recommended)
+## Security
+
+Vulnerabilities can be reported via [GitHub Issues](https://github.com/mgm-sec/DASBOM-pub/issues). See [SECURITY.md](SECURITY.md) for scope and policy.
+
+---
+
+## Docker
 
 ```bash
+# Recommended: docker compose (security flags pre-configured)
+GH_TOKEN=<your_token> docker compose up --build
+
+# Alternative: plain docker run
 docker build -t sbom-viz .
 docker run -p 8080:8080 -e GH_TOKEN=<your_token> sbom-viz
 ```
@@ -56,7 +67,7 @@ Mix and match — scan multiple orgs and individual repos in one run. Add or rem
 
 | Step | Script | What it does |
 |------|--------|--------------|
-| 00 | `00_check_tools.sh` | Install `syft`, `jq`, Python venv (skipped in Docker) |
+| 00 | `00_check_tools.sh` | Verify required tools (skipped in Docker) |
 | 00b | `00b_parse_targets.sh` | Resolve org/repo URLs → `repos_to_clone.txt` |
 | 02 | `02_clone_repos.sh` | Shallow-clone repos (8 parallel) |
 | 03 | `03_generate_sbom.sh` | `syft` → per-repo SPDX 2.3 + CycloneDX 1.5 |
@@ -101,10 +112,10 @@ Mix and match — scan multiple orgs and individual repos in one run. Add or rem
 ## Tech stack
 
 - **Graph**: [graphology](https://graphology.github.io) + [sigma.js](https://www.sigmajs.org)
-- **SBOMs**: [syft](https://github.com/anchore/syft) (SPDX 2.3 + CycloneDX 1.5)
+- **SBOMs**: [syft v1.44.0](https://github.com/anchore/syft) (SPDX 2.3 + CycloneDX 1.5)
 - **CVEs**: [OSV.dev](https://osv.dev) batch API
 - **Layout**: custom radial BFS (`scripts/python/recompute_layout.py`)
-- **Web server**: Flask (Docker mode) — `server.py`
+- **Web server**: Flask 3.1.3 (Docker mode) — `server.py`
 - **Pipeline**: bash + Python 3 stdlib
 
 ---

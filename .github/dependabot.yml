@@ -1,0 +1,29 @@
+version: 2
+
+updates:
+  # Docker base image — tracks SHA256 pin in Dockerfile
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 2
+
+  # Python deps — tracks requirements.txt (Flask + transitive)
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 2
+
+  # JS test deps — tracks tests/js/package.json (Jest)
+  - package-ecosystem: npm
+    directory: /tests/js
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 2

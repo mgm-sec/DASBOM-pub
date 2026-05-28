@@ -1,0 +1,20 @@
+services:
+  sbom-viz:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - GH_TOKEN=${GH_TOKEN:-}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/repos
+    volumes:
+      - sbom_output:/app/output
+
+volumes:
+  sbom_output:
