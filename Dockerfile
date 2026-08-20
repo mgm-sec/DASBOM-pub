@@ -1,6 +1,6 @@
 # python:3.12-slim-bookworm — Debian Bookworm LTS (EOL ~2028), minimal footprint
 # SHA256 pinned to multi-arch index (amd64/arm64/arm); Dependabot will open PRs for updates
-FROM python:3.14.5-slim-bookworm@sha256:a9bee15510a364124aa24692899d269835683b883de42f7ebec8c293cf679ccb
+FROM python:3.14.7-slim-bookworm@sha256:23c59390fc717bf09f9336908199a0ae75d9c4264bf296123f94ad772fea3b52
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
